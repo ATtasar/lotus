@@ -1,9 +1,5 @@
 # Lotus · 电脑端创作者工作台
 
-保留原有电脑端 UI、布局、字体、配色、导航和全部稿件交互。仅发布 Windows 电脑端，不包含手机、Android、局域网、云服务或独立收纳业务。
-
-后端与部署参考 [oimimo-scheduler](https://github.com/mimo9708/oimimo-scheduler)：**Flask + Pydantic + SQLite WAL**，本机浏览器访问，系统托盘、单实例、PyInstaller 独立运行包和 Inno Setup 安装包。为兼容现有 UI，保留 Lotus 原有 API 与数据模型；Windows HTTP 服务使用 Waitress。
-
 ## 直接使用
 
 到 [Releases](https://github.com/ATtasar/lotus/releases) 下载：
