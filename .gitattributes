@@ -1,0 +1,9 @@
+* text=auto
+*.cmd -text whitespace=trailing-space,space-before-tab,cr-at-eol
+*.bat -text whitespace=trailing-space,space-before-tab,cr-at-eol
+*.ico binary
+*.png binary
+*.zip binary
+
+# Preserve the approved desktop files byte for byte in GitHub ZIPs.
+desktop/** -text

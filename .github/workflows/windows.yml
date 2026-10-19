@@ -1,0 +1,79 @@
+name: Windows desktop package
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13.16'
+          architecture: x64
+          cache: pip
+          cache-dependency-path: 'requirements*.txt'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: tests/package-lock.json
+      - name: Install build and test dependencies
+        shell: pwsh
+        run: |
+          python -m pip install -r requirements-build.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm ci --prefix tests --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          choco install innosetup --no-progress -y
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build desktop EXE, ZIP and installer
+        shell: pwsh
+        run: |
+          $env:PYTHONUTF8='1'
+          python tools/build_windows.py
+          exit $LASTEXITCODE
+      - name: Original desktop interaction test against frozen EXE
+        shell: pwsh
+        run: |
+          $env:PYTHONUTF8='1'
+          $env:LOTUS_PYTHON=(Get-Command python).Source
+          $version=(Get-Content VERSION -Raw).Trim()
+          $env:LOTUS_EXE=(Resolve-Path "dist/$version/Lotus/Lotus.exe").Path
+          node tests/ui.mjs
+          exit $LASTEXITCODE
+      - name: Verify frozen EXE
+        shell: pwsh
+        run: |
+          $env:PYTHONUTF8='1'
+          $version=(Get-Content VERSION -Raw).Trim()
+          python tools/check_release.py --exe "dist/$version/Lotus/Lotus.exe"
+          exit $LASTEXITCODE
+      - uses: actions/upload-artifact@v7
+        with:
+          name: lotus-windows
+          path: |
+            dist/**/*.zip
+            dist/**/*setup*.exe
+            dist/**/release.json
+      - name: Attach files to tagged release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version=(Get-Content VERSION -Raw).Trim()
+          if ($env:GITHUB_REF_NAME -ne "v$version") { throw 'Tag and VERSION differ.' }
+          gh release view $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY --title "Lotus $version" --notes 'Windows desktop only. Original UI preserved; local Flask and SQLite.'
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          gh release upload $env:GITHUB_REF_NAME "dist/$version/lotus-$version-portable-win64.zip" "dist/$version/lotus-$version-setup-win64.exe" "dist/$version/release.json" --repo $env:GITHUB_REPOSITORY --clobber
+          exit $LASTEXITCODE
