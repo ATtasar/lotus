@@ -5,11 +5,30 @@ import subprocess
 import sys
 import time
 import urllib.request
+import pytest
 
 from test_storage import fixture
 
 ROOT = Path(__file__).resolve().parents[1]
 HTTP = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+
+def test_service_state_removed_during_stop_is_safe(tmp_path, monkeypatch):
+    import launcher
+    (tmp_path / 'runtime').mkdir()
+    (tmp_path / 'runtime/service.json').write_text('{}')
+    def removed_during_read(_):
+        raise FileNotFoundError('service removed its own state while exiting')
+    monkeypatch.setattr(launcher, 'read_json', removed_during_read)
+    assert launcher.state(tmp_path) is None
+
+
+def test_corrupt_service_state_is_not_silently_ignored(tmp_path):
+    import launcher
+    (tmp_path / 'runtime').mkdir()
+    (tmp_path / 'runtime/service.json').write_text('{broken')
+    with pytest.raises(json.JSONDecodeError):
+        launcher.state(tmp_path)
 
 
 def test_source_install_restart_and_missing_config_recovery(tmp_path):

@@ -14,6 +14,8 @@ const port = 17865,
 const python = process.env.LOTUS_PYTHON;
 const frozenExe = process.env.LOTUS_EXE;
 const currentVersion = (await fs.readFile('VERSION', 'utf8')).trim();
+const [testMajor, testMinor] = currentVersion.split('.').map(Number);
+const futureVersion = `${testMajor}.${testMinor + 1}.0`;
 if (!python) throw Error('Set LOTUS_PYTHON to the Python executable used for source tests.');
 function launch(command, initialize = false) {
  const result=spawnSync(frozenExe || python,[...(frozenExe ? [] : [path.resolve('launcher.py')]),command,'--data-root',root,...(initialize?['--port',String(port),'--no-shortcut']:[]),'--no-browser','--no-tray'],{cwd:path.resolve('.'),stdio:'inherit',windowsHide:true,env:{...process.env,PYTHONUTF8:'1'}});
@@ -374,10 +376,10 @@ try {
       contentType: 'application/json',
       body: JSON.stringify({
         currentVersion,
-        latestVersion: '1.3.0',
-        releaseName: 'Lotus 1.3.0',
+        latestVersion: futureVersion,
+        releaseName: 'Lotus ' + futureVersion,
         releaseNotes: '测试更新说明',
-        releaseUrl: 'https://github.com/ATtasar/lotus/releases/tag/v1.3.0',
+        releaseUrl: 'https://github.com/ATtasar/lotus/releases/tag/v' + futureVersion,
         publishedAt: '2026-10-19T00:00:00Z',
         updateAvailable: true,
         isLatest: false,
@@ -385,8 +387,8 @@ try {
     }),
   );
   await action('check-update');
-  await page.waitForFunction(() => document.querySelector('#update-status')?.textContent.includes('1.3.0'));
-  assert.match(await page.getByRole('dialog').innerText(), /最新版本.*1\.3\.0|发现新版本 1\.3\.0/);
+  await page.waitForFunction((version) => document.querySelector('#update-status')?.textContent.includes(version), futureVersion);
+  assert.ok((await page.getByRole('dialog').innerText()).includes(futureVersion));
   assert.match(await page.getByRole('dialog').innerText(), /测试更新说明/);
   assert.match(await page.getByRole('dialog').innerText(), /关闭 Lotus/);
   await page.unroute('**/local-api/update');

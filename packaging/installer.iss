@@ -1,11 +1,11 @@
 #ifndef MyAppVersion
-  #define MyAppVersion "1.3.0"
+  #define MyAppVersion "1.3.1"
 #endif
 #ifndef DistDir
-  #define DistDir "..\dist\1.3.0\Lotus"
+  #define DistDir "..\dist\1.3.1\Lotus"
 #endif
 #ifndef ReleaseDir
-  #define ReleaseDir "..\dist\1.3.0"
+  #define ReleaseDir "..\dist\1.3.1"
 #endif
 
 [Setup]

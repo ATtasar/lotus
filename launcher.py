@@ -96,7 +96,12 @@ def health(port):
 
 def state(root):
     file = root / "runtime/service.json"
-    return read_json(file) if file.is_file() else None
+    try:
+        return read_json(file)
+    except FileNotFoundError:
+        # Normal during shutdown: the service can remove its state between
+        # the launcher's existence check and read. Treat that as stopped.
+        return None
 
 
 def settings(root, port=None):
