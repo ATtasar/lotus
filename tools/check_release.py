@@ -32,6 +32,7 @@ def main():
     runtime_env["PATH"] = os.pathsep.join(map(str, [windows / "System32", windows, windows / "System32/WindowsPowerShell/v1.0"]))
     assert shutil.which("node", path=runtime_env["PATH"]) is None
     assert shutil.which("python", path=runtime_env["PATH"]) is None
+    hosted_runner = os.environ.get("GITHUB_ACTIONS") == "true"
     def run(command, *options):
         # Frozen startup can be delayed by first-run antivirus scanning on a
         # fresh GitHub-hosted Windows runner. The interaction suite already
@@ -49,7 +50,13 @@ def main():
         with http.open(urllib.request.Request(base + "/local-api/" + endpoint, headers=headers, data=json.dumps(body).encode() if body is not None else None), timeout=15) as response:
             return json.load(response)
     try:
-        run("install", "--port", str(port), "--no-browser", "--no-tray", "--desktop-dir", str(desktop), "--start-menu-dir", str(menu))
+        install_options = ["--port", str(port), "--no-browser", "--no-tray", "--desktop-dir", str(desktop), "--start-menu-dir", str(menu)]
+        # GitHub-hosted Windows runners have no interactive Explorer desktop;
+        # WScript.Shell shortcut creation can block indefinitely there. The
+        # same shortcut path remains covered on a normal Windows host.
+        if hosted_runner:
+            install_options.append("--no-shortcut")
+        run("install", *install_options)
         with http.open(base, timeout=5) as response:
             if response.read() != (ROOT / "desktop/index.html").read_bytes():
                 raise ValueError("运行包未提供已审核的电脑端页面。")
@@ -64,24 +71,29 @@ def main():
         run("start", "--no-browser", "--no-tray")
         assert request("health")["pid"] == first["pid"]
         run("stop")
-        for folder in (desktop, menu):
-            previous_open = json.loads((root / "runtime/last-open.json").read_text(encoding="utf-8"))["at"] if (root / "runtime/last-open.json").exists() else None
-            link = folder / "创作者工作台.lnk"
-            assert link.is_file()
-            result = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "Start-Process -FilePath $env:LOTUS_TEST_LINK -WindowStyle Hidden"], env={**os.environ, "LOTUS_TEST_LINK": str(link)}, capture_output=True, timeout=20, creationflags=subprocess.CREATE_NO_WINDOW)
-            assert result.returncode == 0
-            for _ in range(160):
-                try:
-                    opened = json.loads((root / "runtime/last-open.json").read_text(encoding="utf-8"))
-                    if opened["url"] == base and opened["at"] != previous_open and request("health")["profile"] == "desktop-only":
-                        break
-                except (OSError, ValueError):
-                    pass
-                time.sleep(0.1)
-            assert request("desktop-workspace")["data"] == data
-            assert opened["at"] != previous_open
-            run("stop")
-        result = {"passed": True, "exe": str(exe), "isolatedRoot": str(root), "checks": ["no system Python or Node required by EXE", "packaged VERSION exposed by local API", "reviewed desktop HTML", "order/image SQLite save", "same-process reuse", "real Windows desktop and Start menu shortcuts", "default browser invocation", "restart persistence", "loopback-only profile"]}
+        checks = ["no system Python or Node required by EXE", "packaged VERSION exposed by local API", "reviewed desktop HTML", "order/image SQLite save", "same-process reuse", "restart persistence", "loopback-only profile"]
+        if not hosted_runner:
+            for folder in (desktop, menu):
+                previous_open = json.loads((root / "runtime/last-open.json").read_text(encoding="utf-8"))["at"] if (root / "runtime/last-open.json").exists() else None
+                link = folder / "创作者工作台.lnk"
+                assert link.is_file()
+                result = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "Start-Process -FilePath $env:LOTUS_TEST_LINK -WindowStyle Hidden"], env={**os.environ, "LOTUS_TEST_LINK": str(link)}, capture_output=True, timeout=20, creationflags=subprocess.CREATE_NO_WINDOW)
+                assert result.returncode == 0
+                for _ in range(160):
+                    try:
+                        opened = json.loads((root / "runtime/last-open.json").read_text(encoding="utf-8"))
+                        if opened["url"] == base and opened["at"] != previous_open and request("health")["profile"] == "desktop-only":
+                            break
+                    except (OSError, ValueError):
+                        pass
+                    time.sleep(0.1)
+                assert request("desktop-workspace")["data"] == data
+                assert opened["at"] != previous_open
+                run("stop")
+            checks.extend(["real Windows desktop and Start menu shortcuts", "default browser invocation"])
+        else:
+            checks.append("shortcut check skipped on non-interactive GitHub runner")
+        result = {"passed": True, "exe": str(exe), "isolatedRoot": str(root), "checks": checks}
         (ROOT / "artifacts/frozen-result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
         print(json.dumps(result, ensure_ascii=False, indent=2))
     finally:
