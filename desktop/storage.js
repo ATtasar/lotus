@@ -17,6 +17,7 @@ export const storage = {
     return data;
   },
   info: () => request('info'),
+  checkUpdate: () => request('update'),
   async load() {
     await connect(true);
     const result = await request('desktop-workspace');

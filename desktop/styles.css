@@ -341,6 +341,16 @@ svg.icon {
 .breadcrumb span:last-child {
   color: #3a3a3a;
 }
+.breadcrumb button {
+  padding: 3px 0;
+  color: #888;
+  border-bottom: 1px solid transparent;
+}
+.breadcrumb button:hover,
+.breadcrumb button:focus-visible {
+  color: #333;
+  border-bottom-color: #aaa;
+}
 .top-actions {
   display: flex;
   align-items: center;
@@ -2119,6 +2129,34 @@ svg.icon {
   grid-template-columns: 1fr 1fr;
   gap: 10px;
   margin: 19px 0;
+}
+.linked-detail {
+  padding: 28px;
+}
+.linked-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  padding-top: 22px;
+  margin-top: 22px;
+  border-top: 1px solid var(--line);
+}
+.release-notes {
+  max-height: 180px;
+  overflow: auto;
+  margin: 12px 0;
+  padding: 13px 15px;
+  border: 1px solid #e7e7e7;
+  border-radius: 5px;
+  background: #fff;
+  color: #666;
+  font-size: 11px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+}
+.update-error {
+  border-color: #dfcaca;
+  color: #7a4444;
 }
 .lightbox img {
   display: block;

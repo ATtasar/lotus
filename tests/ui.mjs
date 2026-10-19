@@ -113,6 +113,12 @@ try {
   await page.locator('button[form=client-form]').click();
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
   await saved();
+  await action('platform-manager');
+  await page.locator('.platform-manager-row [name=color]').fill('#ff3366');
+  await page.locator('button[form=platform-form]').click();
+  await page.getByRole('dialog').waitFor({ state: 'hidden' });
+  await saved();
+  assert.equal((await state()).platforms[0].color, '#ff3366');
 
   await nav('templates');
   await action('new-template');
@@ -158,7 +164,12 @@ try {
   await page.locator('#save-order-btn').click();
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
   await saved();
+  await page.locator('tbody [data-action=client-detail]').first().click();
+  assert.match(await page.locator('.breadcrumb').innerText(), /稿件管理.*电脑端测试单主/s);
+  assert.match(await page.locator('.linked-detail').innerText(), /历史稿件/);
+  await page.locator('[data-action=breadcrumb-nav][data-index="0"]').click();
   await page.locator('tbody [data-action=order-detail]').first().click();
+  assert.match(await page.locator('.breadcrumb').innerText(), /稿件管理.*本地电脑端稿件/s);
   await action('edit-order');
   await page.locator('[name=notes]').fill('编辑后保存');
   await page.locator('[name=status]').selectOption('草稿');
@@ -180,20 +191,27 @@ try {
     await page.locator('.event strong').filter({ hasText: '本地电脑端稿件' }).count(),
     1,
   );
+  assert.match(await page.locator('.event').first().getAttribute('style'), /#ff3366/);
   assert.match(await page.locator('.income-total').innerText(), /100/);
   await nav('clients');
   await page.locator('[data-action=client-detail]').first().click();
-  assert.match(await page.getByRole('dialog').innerText(), /本地电脑端稿件/);
-  assert.match(await page.getByRole('dialog').innerText(), /测试作者名/);
-  assert.match(await page.getByRole('dialog').innerText(), /测试称呼/);
-  assert.match(await page.getByRole('dialog').innerText(), /合作次数\s*1 次/);
+  assert.match(await page.locator('.linked-detail').innerText(), /本地电脑端稿件/);
+  assert.match(await page.locator('.linked-detail').innerText(), /测试作者名/);
+  assert.match(await page.locator('.linked-detail').innerText(), /测试称呼/);
+  assert.match(await page.locator('.linked-detail').innerText(), /合作次数\s*1 次/);
   await page.locator('#client-history-search').fill('不匹配的关键词');
   assert.equal(await page.locator('#client-history-list .detail-link').count(), 0);
   await page.locator('#client-history-search').fill('本地电脑端');
   assert.equal(await page.locator('#client-history-list .detail-link').count(), 1);
-  await action('close-modal');
+  await page.locator('#client-history-list .detail-link').click();
+  assert.match(await page.locator('.breadcrumb').innerText(), /单主管理.*电脑端测试单主.*本地电脑端稿件/s);
+  await page.locator('[data-action=breadcrumb-nav][data-index="1"]').click();
+  assert.match(await page.locator('.linked-detail').innerText(), /测试作者名/);
   await nav('home');
   assert.match(await page.locator('.current-body').innerText(), /电脑端稿件要求/);
+  assert.match(await page.locator('.week-panel').innerText(), /仅显示截稿日期/);
+  assert.doesNotMatch(await page.locator('.week-panel').innerText(), /开始 \/ 截稿/);
+  assert.equal(await page.locator('.week-panel .event strong').filter({ hasText: '本地电脑端稿件' }).count(), 1);
   await page.screenshot({ path: path.join(output, 'desktop-home.png'), fullPage: true });
   await nav('tools');
   await upload('upload-assets');
@@ -334,6 +352,40 @@ try {
   assert.equal(await page.locator('[data-action=lan-settings]').count(), 0);
   assert.doesNotMatch(await page.locator('.nav').innerText(), /收纳|手机/);
   assert.match(await page.getByRole('dialog').innerText(), /workbench\.sqlite/);
+  assert.match(await page.getByRole('dialog').innerText(), /当前安装版本：1\.2\.0/);
+  await page.route('**/local-api/update', (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ message: '网络不可用，软件仍可离线使用。' }),
+    }),
+  );
+  await action('check-update');
+  await page.waitForFunction(() => document.querySelector('#update-status')?.textContent.includes('离线使用'));
+  assert.match(await page.getByRole('dialog').innerText(), /网络不可用.*离线使用/s);
+  await page.unroute('**/local-api/update');
+  await page.route('**/local-api/update', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        currentVersion: '1.2.0',
+        latestVersion: '1.3.0',
+        releaseName: 'Lotus 1.3.0',
+        releaseNotes: '测试更新说明',
+        releaseUrl: 'https://github.com/ATtasar/lotus/releases/tag/v1.3.0',
+        publishedAt: '2026-10-19T00:00:00Z',
+        updateAvailable: true,
+        isLatest: false,
+      }),
+    }),
+  );
+  await action('check-update');
+  await page.waitForFunction(() => document.querySelector('#update-status')?.textContent.includes('1.3.0'));
+  assert.match(await page.getByRole('dialog').innerText(), /最新版本.*1\.3\.0|发现新版本 1\.3\.0/);
+  assert.match(await page.getByRole('dialog').innerText(), /测试更新说明/);
+  assert.match(await page.getByRole('dialog').innerText(), /关闭 Lotus/);
+  await page.unroute('**/local-api/update');
   await action('backup-local');
   await page.waitForFunction(() =>
     document.querySelector('#toast').textContent.includes('数据库与图片已备份'),
@@ -438,6 +490,18 @@ try {
   assert.ok(remembered.categories.includes('保留的自定义类别'));
   assert.equal(remembered.templates.filter((t) => t.category === '保留的自定义类别').length, 0);
   await action('close-modal');
+  await action('category-manager');
+  await page.locator('#new-category-name').fill('可删除类别');
+  await action('add-category');
+  await saved();
+  assert.ok((await state()).categories.includes('可删除类别'));
+  await page.locator('[data-action=delete-category][data-name="可删除类别"]').click();
+  await saved();
+  await page.locator('[data-action=delete-category][data-name="保留的自定义类别"]').click();
+  await saved();
+  assert.equal((await state()).categories.includes('可删除类别'), false);
+  assert.equal((await state()).categories.includes('保留的自定义类别'), false);
+  await action('close-category-manager');
   await nav('orders');
   await action('new-order');
   await page.locator('[name=title]').fill('临时删除测试稿件');
@@ -511,7 +575,7 @@ try {
     JSON.stringify(
       {
         passed: true,
-        ui: 'original-desktop-blank',
+        ui: 'lotus-desktop-1.2',
         root,
         bounds,
         external,
@@ -522,7 +586,11 @@ try {
           'client/platform/template/order create and edit',
           'optional client CN / salutation / platform URL and searchable history',
           'duration-free templates and persisted custom commission stages',
-          'saved category selection and category history survives last-template deletion / reload',
+          'saved category selection, category manager create/delete and linked statistics',
+          'platform color persistence across lists, calendar and schedule',
+          'deadline-only calendar and weekly schedule',
+          'clickable order/client hierarchy with breadcrumb navigation',
+          'release check version, notes, download link and data-safety guidance',
           'editable fonts / colors / background / styles in three components',
           'real text dragging, optional card number and manual template text',
           'save as new / update / switch component templates',
@@ -547,7 +615,7 @@ try {
     ),
   );
   console.log(
-    'PASS original desktop UI, linked workflows, local image files, exports, backups and restart persistence',
+    'PASS Lotus desktop UI, linked workflows, update panel, local files, backups and restart persistence',
   );
 } finally {
   await browser.close();

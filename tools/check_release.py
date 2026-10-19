@@ -48,13 +48,15 @@ def main():
         run("install", "--port", str(port), "--no-browser", "--no-tray", "--desktop-dir", str(desktop), "--start-menu-dir", str(menu))
         with http.open(base, timeout=5) as response:
             if response.read() != (ROOT / "desktop/index.html").read_bytes():
-                raise ValueError("运行包未提供原电脑端页面。")
+                raise ValueError("运行包未提供已审核的电脑端页面。")
         # Import only in the test driver, never in the frozen application.
         sys.path.insert(0, str(ROOT / "tests"))
         from test_storage import fixture
         data = fixture()
         request("desktop-workspace", {"data": data, "baseRevision": 0})
         first = request("health")
+        assert first["version"] == (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+        assert request("info")["version"] == first["version"]
         run("start", "--no-browser", "--no-tray")
         assert request("health")["pid"] == first["pid"]
         run("stop")
@@ -75,7 +77,7 @@ def main():
             assert request("desktop-workspace")["data"] == data
             assert opened["at"] != previous_open
             run("stop")
-        result = {"passed": True, "exe": str(exe), "isolatedRoot": str(root), "checks": ["no system Python or Node required by EXE", "original desktop HTML", "order/image SQLite save", "same-process reuse", "real Windows desktop and Start menu shortcuts", "default browser invocation", "restart persistence", "loopback-only profile"]}
+        result = {"passed": True, "exe": str(exe), "isolatedRoot": str(root), "checks": ["no system Python or Node required by EXE", "packaged VERSION exposed by local API", "reviewed desktop HTML", "order/image SQLite save", "same-process reuse", "real Windows desktop and Start menu shortcuts", "default browser invocation", "restart persistence", "loopback-only profile"]}
         (ROOT / "artifacts/frozen-result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
         print(json.dumps(result, ensure_ascii=False, indent=2))
     finally:

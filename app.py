@@ -12,6 +12,7 @@ from pydantic import ValidationError
 from werkzeug.exceptions import HTTPException
 
 from db import APP_ID, SCHEMA_VERSION, Conflict, Store
+from updates import RELEASES_PAGE, UpdateCheckError, check_for_updates, read_current_version
 
 DESKTOP_FILES = {"index.html", "styles.css", "app.js", "api.js", "storage.js", "model.js", "design-model.js", "designer.js", "workbench.ico"}
 MAX_REQUEST_BYTES = 128 * 1024 * 1024
@@ -40,6 +41,7 @@ def create_app(root, *, port=17841, instance="source", initialize=False, web=Non
     app.json.ensure_ascii = False
     app.json.sort_keys = False
     store = Store(root, initialize=initialize)
+    current_version = read_current_version(resource_dir())
     token = secrets.token_hex(32)
     origin = f"http://127.0.0.1:{port}"
     app.extensions["lotus"] = {"store": store, "token": token, "instance": instance, "apiBase": api_base, "port": port, "closing": False, "shutdown": None}
@@ -63,7 +65,7 @@ def create_app(root, *, port=17841, instance="source", initialize=False, web=Non
 
     def api(endpoint):
         if endpoint == "health" and request.method == "GET":
-            return jsonify(appId=APP_ID, instance=instance, status="ok", ui="desktop-blank", protocol=4, engine="flask", profile="desktop-only", pid=os.getpid(), apiBase=api_base, port=port, dataRoot=str(root), databasePath=str(store.database), web=str(web.resolve()), schemaVersion=SCHEMA_VERSION)
+            return jsonify(appId=APP_ID, instance=instance, status="ok", ui="desktop-blank", protocol=4, engine="flask", profile="desktop-only", pid=os.getpid(), apiBase=api_base, port=port, dataRoot=str(root), databasePath=str(store.database), web=str(web.resolve()), schemaVersion=SCHEMA_VERSION, version=current_version)
         if request.headers.get("X-Lotus-Local") != "1":
             return jsonify(message="无效的工作台请求。"), 403
         if endpoint == "session" and request.method == "GET":
@@ -76,7 +78,12 @@ def create_app(root, *, port=17841, instance="source", initialize=False, web=Non
             if endpoint == "revision":
                 return jsonify(revision=store.revision())
             if endpoint == "info":
-                return jsonify(profile="desktop-only", databasePath=str(store.database), filesPath=str(store.files_dir), backupsPath=str(root / "backups"), engine="flask", schemaVersion=SCHEMA_VERSION)
+                return jsonify(profile="desktop-only", databasePath=str(store.database), filesPath=str(store.files_dir), backupsPath=str(root / "backups"), engine="flask", schemaVersion=SCHEMA_VERSION, version=current_version, releasesPage=RELEASES_PAGE)
+            if endpoint == "update":
+                try:
+                    return jsonify(check_for_updates(current_version))
+                except UpdateCheckError as error:
+                    return jsonify(message=str(error), currentVersion=current_version, releaseUrl=RELEASES_PAGE), 503
             return jsonify(message="电脑端接口不存在。"), 404
         if request.method != "POST":
             return jsonify(message="请求类型不正确。"), 405

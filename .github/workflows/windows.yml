@@ -39,7 +39,7 @@ jobs:
           $env:PYTHONUTF8='1'
           python tools/build_windows.py
           exit $LASTEXITCODE
-      - name: Original desktop interaction test against frozen EXE
+      - name: Desktop interaction test against frozen EXE
         shell: pwsh
         run: |
           $env:PYTHONUTF8='1'
@@ -72,7 +72,7 @@ jobs:
           if ($env:GITHUB_REF_NAME -ne "v$version") { throw 'Tag and VERSION differ.' }
           gh release view $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY --title "Lotus $version" --notes 'Windows desktop only. Original UI preserved; local Flask and SQLite.'
+            gh release create $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY --title "Lotus $version" --notes-file RELEASE-NOTES.md
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
           gh release upload $env:GITHUB_REF_NAME "dist/$version/lotus-$version-portable-win64.zip" "dist/$version/lotus-$version-setup-win64.exe" "dist/$version/release.json" --repo $env:GITHUB_REPOSITORY --clobber

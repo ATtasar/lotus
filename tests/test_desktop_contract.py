@@ -5,7 +5,7 @@ import json
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_approved_ui_is_byte_identical():
+def test_approved_desktop_resources_match_manifest():
     manifest = json.loads((ROOT / "docs/UI-MANIFEST.json").read_text(encoding="utf-8"))
     for name, checksum in manifest["files"].items():
         assert hashlib.sha256((ROOT / name).read_bytes()).hexdigest() == checksum, name

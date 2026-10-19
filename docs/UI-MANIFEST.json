@@ -1,8 +1,8 @@
 {
-  "source": "ATtasar/Lotus-Workbench 2a2ba58 (approved Windows working copy)",
+  "source": "Lotus 1.2.0 approved functional update based on ATtasar/lotus e06021c",
   "files": {
     "desktop/api.js": "3fb64f67091a58965fd1f4578f3a620e93d42f8ef0a70d71c90de5ce52227924",
-    "desktop/app.js": "9568ad6a544a10b162366339453dc34a484d0d6bb6ad9898efd157633d88920e",
+    "desktop/app.js": "6e2e44b9210d777da202c562b4bc07bfe4fe92fde5a602074da18538bc2ed72f",
     "desktop/design-model.d.ts": "baf33070bf5596d379f8660ddd3bdc9b1b53e09135ea5bb5f843335ba627422d",
     "desktop/design-model.js": "952f877f3e18435bd70febac20a405030009a25daea99eabe201efb3711f0ac9",
     "desktop/designer.js": "41342f0bdc8e92b83c3c4362a8148f0d02fc9c173bf1550e2f6724c196822d11",
@@ -10,8 +10,8 @@
     "desktop/model.d.ts": "aa7d0eff6ae12d7f297745b03c9bac4959b84ca32f5625a53c7fe28f0c84395d",
     "desktop/model.js": "1b0b0c70688e4a903189e589dc2cf239facfabadcbf7bc1e69475b5f6dd332b4",
     "desktop/SOURCE.md": "76acce7e85b08a6e4d9f1662f9047e86305e55ec3cbad03889871106d047c054",
-    "desktop/storage.js": "8d08a93f1f39e33a9822da161457b06ab7ebda7b6572afb269f3577c6cd185af",
-    "desktop/styles.css": "54524fd00070357753e82e27b8389975cb1d0045cfeb953bece407bea94ec294",
+    "desktop/storage.js": "9f4e7b56fbaa05552898e6acee829f2b4d9e967332cedbf9f36b67a7c26147be",
+    "desktop/styles.css": "e3ddc6e01ebf170017be813cdce6e34baafc28e4df5c1c9768a3a4bc9f65b524",
     "desktop/workbench.ico": "1e8acd008d708b1b3cc29f78f449fd552769d86383d1b562ed4270a3cb86555a"
   }
 }
