@@ -9,7 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from images import decode_image
 
-COLLECTIONS = ("platforms", "clients", "archivedClients", "orders", "templates", "assets", "toolTemplates")
+EXTRA_COLLECTIONS = ("priceEntries", "priceLists", "replyFolders", "replyTemplates")
+COLLECTIONS = ("platforms", "clients", "archivedClients", "orders", "templates", "assets", "toolTemplates", *EXTRA_COLLECTIONS)
 Identifier = Annotated[str, Field(pattern=r"^[a-zA-Z0-9_-]{1,80}$")]
 Text = Annotated[str, Field(max_length=30000)]
 Color = Annotated[str, Field(pattern=r"^#[0-9a-fA-F]{6}$")]
@@ -114,6 +115,53 @@ class ToolTemplate(Record):
     kind: Literal["receipt", "card", "layout"]
 
 
+class PriceEntry(Record):
+    name: Annotated[str, Field(min_length=1, max_length=100)]
+    price: Money
+    description: Text
+    image: str = ""
+    bg: Color
+    color: Color
+    fit: Literal["cover", "contain"]
+
+    @field_validator("name")
+    @classmethod
+    def nonempty(cls, value):
+        if not value.strip():
+            raise ValueError("价目名称不能为空。")
+        return value
+
+
+class PriceList(Record):
+    name: Annotated[str, Field(min_length=1, max_length=100)]
+    bg: Color
+    backgroundImage: str = ""
+    width: Annotated[int, Field(ge=600, le=2400)]
+    columns: Annotated[int, Field(ge=1, le=4)]
+    cardHeight: Annotated[int, Field(ge=280, le=900)]
+    gap: Annotated[int, Field(ge=8, le=100)]
+    padding: Annotated[int, Field(ge=20, le=120)]
+    items: Annotated[list[PriceEntry], Field(max_length=100)]
+
+    @model_validator(mode="after")
+    def layout_valid(self):
+        if not self.name.strip() or len({item.id for item in self.items}) != len(self.items) or self.padding * 2 + self.gap * (self.columns - 1) + self.columns * 80 > self.width:
+            raise ValueError("价目表名称、条目编号或列宽不正确。")
+        return self
+
+
+class ReplyFolder(Record):
+    name: Annotated[str, Field(min_length=1, max_length=100)]
+    parent: str = ""
+
+
+class ReplyTemplate(Record):
+    title: Annotated[str, Field(min_length=1, max_length=100)]
+    body: Text
+    parent: str = ""
+    templateIds: list[Identifier]
+
+
 class Profile(BaseModel):
     model_config = ConfigDict(strict=True, extra="allow")
     name: Text
@@ -124,6 +172,7 @@ class Profile(BaseModel):
 class Workspace(BaseModel):
     model_config = ConfigDict(strict=True, extra="allow", allow_inf_nan=False)
     version: Literal[1]
+    scheduleView: Literal["deadline", "range"] = "deadline"
     profile: Profile
     platforms: Annotated[list[Platform], Field(max_length=10000)]
     clients: Annotated[list[Client], Field(max_length=10000)]
@@ -132,6 +181,10 @@ class Workspace(BaseModel):
     templates: Annotated[list[Commission], Field(max_length=10000)]
     assets: Annotated[list[Asset], Field(max_length=10000)]
     toolTemplates: Annotated[list[ToolTemplate], Field(max_length=10000)]
+    priceEntries: Annotated[list[PriceEntry], Field(max_length=10000)] = []
+    priceLists: Annotated[list[PriceList], Field(max_length=10000)] = []
+    replyFolders: Annotated[list[ReplyFolder], Field(max_length=10000)] = []
+    replyTemplates: Annotated[list[ReplyTemplate], Field(max_length=10000)] = []
     categories: Annotated[list[str], Field(max_length=10000)] = []
 
     @field_validator("categories")
@@ -158,6 +211,21 @@ class Workspace(BaseModel):
         for item in self.orders:
             if item.client not in client_ids:
                 raise ValueError("稿件关联的单主不存在。")
+        folders = {item.id: item for item in self.replyFolders}
+        for folder in self.replyFolders:
+            if not folder.name.strip():
+                raise ValueError("快捷回复分组名称不能为空。")
+            seen = {folder.id}
+            parent = folder.parent
+            while parent:
+                if parent not in folders or parent in seen:
+                    raise ValueError("快捷回复分组缺失或循环嵌套。")
+                seen.add(parent)
+                parent = folders[parent].parent
+        template_ids = {item.id for item in self.templates}
+        for reply in self.replyTemplates:
+            if not reply.title.strip() or reply.parent and reply.parent not in folders or len(set(reply.templateIds)) != len(reply.templateIds) or any(value not in template_ids for value in reply.templateIds):
+                raise ValueError("快捷回复标题、分组或稿件模板关联不正确。")
         return self
 
 
@@ -199,6 +267,9 @@ def validate_workspace(value):
     from images import image_slots
     data = copy.deepcopy(value)
     data.setdefault("archivedClients", [])
+    data.setdefault("scheduleView", "deadline")
+    for key in EXTRA_COLLECTIONS:
+        data.setdefault(key, [])
     for container, key in image_slots(data):
         decode_image(container[key])
     for template in data["toolTemplates"]:
@@ -218,4 +289,4 @@ def validate_workspace(value):
 
 
 def initial_data():
-    return {"version": 1, "appearanceVersion": 2, "categories": [], **{key: [] for key in COLLECTIONS}, "current": "", "profile": {"name": "接稿工作台", "artist": "管理员", "tagline": ""}}
+    return {"version": 1, "appearanceVersion": 2, "scheduleView": "deadline", "categories": [], **{key: [] for key in COLLECTIONS}, "current": "", "profile": {"name": "接稿工作台", "artist": "管理员", "tagline": ""}}

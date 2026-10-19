@@ -43,6 +43,15 @@ def file_id(mime: str, content: bytes) -> str:
 
 
 def image_slots(data: dict):
+    for entry in data.get("priceEntries", []):
+        if entry.get("image"):
+            yield entry, "image"
+    for listing in data.get("priceLists", []):
+        if listing.get("backgroundImage"):
+            yield listing, "backgroundImage"
+        for entry in listing["items"]:
+            if entry.get("image"):
+                yield entry, "image"
     for item in data["orders"] + data["templates"]:
         for index in range(len(item["images"])):
             yield item["images"], index

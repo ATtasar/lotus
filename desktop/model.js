@@ -1,5 +1,6 @@
 // Shared desktop data model; additive fields retain old backup compatibility.
 import { validateDesign } from './design-model.js';
+import { EXTRA_COLLECTIONS, validateExtras } from './workbench-model.js';
 const dateStr = (date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 const parseDate = (s) => new Date(s + 'T12:00:00');
@@ -8,6 +9,7 @@ export function initialData() {
   return {
     version: 1,
     appearanceVersion: 2,
+    scheduleView: 'deadline',
     categories: [],
     platforms: [],
     clients: [],
@@ -16,6 +18,7 @@ export function initialData() {
     templates: [],
     assets: [],
     toolTemplates: [],
+    ...Object.fromEntries(EXTRA_COLLECTIONS.map((key) => [key, []])),
     current: '',
     profile: { name: '接稿工作台', artist: '管理员', tagline: '' },
   };
@@ -36,6 +39,8 @@ export function validateBackup(raw) {
   for (const key of ['platforms', 'clients', 'orders', 'templates', 'assets', 'toolTemplates'])
     if (!Array.isArray(raw[key])) fail('缺少 ' + key);
   raw.archivedClients ||= [];
+  raw.scheduleView ??= 'deadline';
+  if (!['deadline', 'range'].includes(raw.scheduleView)) fail('排期展示样式不正确');
   if (!Array.isArray(raw.archivedClients)) fail('单主历史不正确');
   if (
     raw.categories !== undefined &&
@@ -87,6 +92,7 @@ export function validateBackup(raw) {
       ids.add(item.id);
     }
   }
+  validateExtras(raw, safeImage, fail);
   const platforms = new Set(raw.platforms.map((p) => p.id)),
     clients = new Set([...raw.clients, ...raw.archivedClients].map((c) => c.id));
   for (const p of raw.platforms)
@@ -204,6 +210,7 @@ export function mergeBackup(current, incoming) {
       'templates',
       'assets',
       'toolTemplates',
+      ...EXTRA_COLLECTIONS,
     ].flatMap((key) => merged[key].map((item) => item.id)),
   );
   const newId = () => {
@@ -218,7 +225,8 @@ export function mergeBackup(current, incoming) {
   };
   const platforms = new Map(),
     clients = new Map(),
-    orders = new Map();
+    orders = new Map(), templates = new Map(), folders = new Map();
+  const importedAt = new Date().toISOString();
   for (const item of source.platforms) {
     const existing = merged.platforms.find((record) => record.name === item.name);
     const id = existing?.id || newId();
@@ -234,6 +242,7 @@ export function mergeBackup(current, incoming) {
         ...item,
         id,
         platforms: item.platforms.map((value) => platforms.get(value)),
+        importedAt,
       });
     }
   for (const item of source.orders) {
@@ -246,8 +255,16 @@ export function mergeBackup(current, incoming) {
       client: clients.get(item.client),
     });
   }
-  for (const item of source.templates)
-    merged.templates.push({ ...item, id: newId(), platform: platforms.get(item.platform) });
+  for (const item of source.templates) {
+    const id = newId();
+    templates.set(item.id, id);
+    merged.templates.push({ ...item, id, platform: platforms.get(item.platform) });
+  }
+  for (const item of source.priceEntries) merged.priceEntries.push({ ...item, id: newId() });
+  for (const item of source.priceLists) merged.priceLists.push({ ...item, id: newId(), items: item.items.map((entry) => ({ ...entry, id: newId() })) });
+  for (const item of source.replyFolders) folders.set(item.id, newId());
+  for (const item of source.replyFolders) merged.replyFolders.push({ ...item, id: folders.get(item.id), parent: folders.get(item.parent) || '' });
+  for (const item of source.replyTemplates) merged.replyTemplates.push({ ...item, id: newId(), parent: folders.get(item.parent) || '', templateIds: item.templateIds.map((id) => templates.get(id)) });
   for (const item of source.assets) merged.assets.push({ ...item, id: newId() });
   for (const item of source.toolTemplates)
     merged.toolTemplates.push({

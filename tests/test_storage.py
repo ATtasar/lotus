@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from db import Store, Conflict, restore_backup, read_json, json_bytes
 from models import initial_data, validate_workspace
+from db import SCHEMA_VERSION
 
 PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII="
 
@@ -107,7 +108,7 @@ def test_schema_2_migration_preserves_existing_records_and_legacy_tables(tmp_pat
         before = [tuple(row) for row in connection.execute("SELECT * FROM desktop_records ORDER BY rowid")]
     upgraded = Store(tmp_path)
     with upgraded.connection(readonly=True) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
         assert connection.execute("SELECT payload FROM old_records").fetchone()[0] == "must preserve"
         assert [tuple(row) for row in connection.execute("SELECT * FROM desktop_records ORDER BY rowid")] == before
     assert upgraded.load() == {"revision": 1, "data": fixture()}

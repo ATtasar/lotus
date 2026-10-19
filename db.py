@@ -23,7 +23,7 @@ from images import DISK_REFERENCE, decode_image, file_id, image_slots
 from models import COLLECTIONS, initial_data, validate_workspace
 
 APP_ID = "lotus-workbench-windows-v1"
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 class Conflict(ValueError):
@@ -99,19 +99,18 @@ class Store:
             required = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             if not {"desktop_workspace", "desktop_records", "files"} <= required:
                 raise ValueError("数据库缺少稿件工作区，禁止用空白数据替换。")
-            if version == 3 and not {"desktop_edges", "schema_migrations"} <= required:
+            if version >= 3 and not {"desktop_edges", "schema_migrations"} <= required:
                 raise ValueError("数据库迁移记录缺失，已停止。")
-            if version == 3 and connection.execute("PRAGMA foreign_key_check(desktop_edges)").fetchone():
+            if version >= 3 and connection.execute("PRAGMA foreign_key_check(desktop_edges)").fetchone():
                 raise ValueError("数据库关联校验失败，原数据保留。")
             if migrate:
                 connection.execute("PRAGMA journal_mode=WAL")
         self.load()  # Check images and records before reporting startup success.
         if version == 2 and migrate:
             self._migrate_v2()
-        if version == 2 and not migrate:
-            self.schema_version = 2
-        else:
-            self.schema_version = SCHEMA_VERSION
+        if version < 4 and migrate:
+            self._migrate_v4()
+        self.schema_version = SCHEMA_VERSION if migrate else version
 
     @contextmanager
     def connection(self, *, readonly=False):
@@ -149,7 +148,8 @@ class Store:
             metadata = {key: value for key, value in initial_data().items() if key not in COLLECTIONS}
             connection.execute("INSERT INTO desktop_workspace VALUES(1,0,?)", (json_bytes(metadata).decode(),))
             self._add_schema_v3(connection)
-            connection.execute("PRAGMA user_version=3")
+            connection.execute("INSERT INTO schema_migrations VALUES(4,?,?)", (utc_stamp(), "价目表、文字分组与稿件模板多对多关联；阻止旧版忽略新增记录"))
+            connection.execute("PRAGMA user_version=4")
             connection.execute("COMMIT")
         except BaseException:
             connection.execute("ROLLBACK")
@@ -176,6 +176,22 @@ class Store:
                     raise ValueError("迁移后的关联校验失败。")
         except Exception as error:
             raise ValueError(f"数据库迁移失败，已回滚；升级前备份：{backup}。{error}") from error
+
+    def _migrate_v4(self):
+        # Existing generic tables suffice, but bump the format so old launchers
+        # refuse to open records they would otherwise silently drop on save.
+        backup = self.backup("before-desktop-tools-v4")
+        try:
+            data = self.load()["data"]
+            with self.transaction() as connection:
+                connection.execute("DELETE FROM desktop_edges")
+                self._edges(connection, data)
+                connection.execute("INSERT INTO schema_migrations VALUES(4,?,?)", (utc_stamp(), "价目表、文字分组与稿件模板多对多关联；保留原记录和图片"))
+                if connection.execute("PRAGMA foreign_key_check(desktop_edges)").fetchone():
+                    raise ValueError("新版组件关联校验失败。")
+                connection.execute("PRAGMA user_version=4")
+        except Exception as error:
+            raise ValueError(f"组件数据迁移失败，已回滚；升级前备份：{backup}。{error}") from error
 
     def _load(self, connection):
         # The read transaction gives metadata, records and file references one revision.
@@ -225,6 +241,13 @@ class Store:
                 rows.append((key, order["id"], "platform", "platforms", order["platform"]))
                 if key == "orders":
                     rows.append((key, order["id"], "client", "clients" if order["client"] in active else "archivedClients", order["client"]))
+        for folder in data["replyFolders"]:
+            if folder.get("parent"):
+                rows.append(("replyFolders", folder["id"], "parent", "replyFolders", folder["parent"]))
+        for reply in data["replyTemplates"]:
+            if reply.get("parent"):
+                rows.append(("replyTemplates", reply["id"], "parent", "replyFolders", reply["parent"]))
+            rows.extend(("replyTemplates", reply["id"], f"templateIds.{index}", "templates", value) for index, value in enumerate(reply["templateIds"]))
         connection.executemany("INSERT INTO desktop_edges VALUES(?,?,?,?,?)", rows)
 
     def save(self, value, base_revision):
@@ -335,7 +358,7 @@ def restore_backup(root, source):
     """Caller must hold the service mutex and obtain explicit user confirmation."""
     root, source = Path(root).resolve(), Path(source).resolve()
     manifest = read_json(source / "backup.json")
-    if manifest.get("appId") != APP_ID or manifest.get("format") != 1 or manifest.get("schemaVersion") not in (2, SCHEMA_VERSION) or "workbench.sqlite" not in manifest.get("files", {}):
+    if manifest.get("appId") != APP_ID or manifest.get("format") != 1 or manifest.get("schemaVersion") not in (2, 3, SCHEMA_VERSION) or "workbench.sqlite" not in manifest.get("files", {}):
         raise ValueError("备份格式或版本不兼容。")
     stage = root / ("restore-" + str(uuid4()))
     for name, checksum in manifest["files"].items():

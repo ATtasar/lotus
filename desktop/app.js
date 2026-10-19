@@ -2,6 +2,8 @@ import { initialData, validateBackup, mergeBackup, categoryChoices } from './mod
 import { storage } from './storage.js';
 import { createDesign, prepareDesign } from './design-model.js';
 import { designerControls, drawDesign, bindDesigner, addDesignImages } from './designer.js';
+import { ended, monthIncome, sortedClients, updateOrderDates, sortActive, sortEnded, paginate, calendarRangeWeeks } from './workbench-model.js';
+import { ExtraTools } from './tools-extra.js';
 ('use strict');
 (() => {
   const $ = (s, root = document) => root.querySelector(s);
@@ -91,7 +93,7 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
     };
     const oldColors = ['#c8d9b5', '#edc2d1', '#c6d8da', '#e4d3b6'],
       tones = ['#323232', '#777777', '#ababab', '#d0d0d0'];
-    data.platforms.forEach((p) =>
+    if (data.appearanceVersion !== 2) data.platforms.forEach((p) =>
       set(
         p,
         'color',
@@ -201,6 +203,11 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
   let toastTimer;
   let localInfo,
     toolDirty = false;
+  let activePage = 1, endedPage = 1, incomeMode = 'actual';
+  const extras = new ExtraTools({ getData: () => data, persist, render, toast, dirty: markToolDirty,
+    back: () => { toolDirty = false; tool = ''; render(); },
+    clean: () => { toolDirty = false; updateSaveStatus(); },
+    upload: (callback) => pickFiles(async (files) => callback((await readImages(files))[0]?.src || '')) });
   function hasUnsavedChanges() {
     return pendingSaves > 0 || failedSave || !!modal?.dirty || toolDirty;
   }
@@ -244,12 +251,6 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
     Number(o.balance || 0) +
     (o.extras || []).reduce((n, x) => n + Number(x.amount || 0), 0);
   const net = (o) => Math.round(gross(o) * (1 - Number(o.fee || 0) / 100) * 100) / 100;
-  const received = (o) =>
-    o.status === '退单'
-      ? 0
-      : o.paid
-        ? net(o)
-        : Math.round(Number(o.deposit || 0) * (1 - Number(o.fee || 0) / 100) * 100) / 100;
   const allStages = (o) => [...o.stages, '退单'];
   function toast(message) {
     clearTimeout(toastTimer);
@@ -334,6 +335,7 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
           const snapshot = await storage.readRemote();
           if (canRefresh() && snapshot.revision > storage.version()) {
             data = storage.acceptRemote(snapshot);
+            extras.reset();
             data.categories = categoryChoices(data);
             watermark.mark = data.watermarkMark || null;
             syncMessage = '';
@@ -379,7 +381,8 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
     $('#app').innerHTML =
       `<aside class="sidebar"><a href="#home" class="brand" data-action="nav" data-page="home"><div class="brand-mark">稿</div><div class="brand-name">${e(data.profile.name)}<small>个人接稿管理</small></div></a><div class="nav-label">工作空间</div><nav class="nav" aria-label="主要导航">${navItems.map(([id, label, ic]) => `<button type="button" data-action="nav" data-page="${id}" class="${page === id ? 'active' : ''}" title="${label}" aria-label="${label}" ${page === id ? 'aria-current="page"' : ''}>${icon(ic)}<span>${label}</span>${id === 'orders' ? `<span class="nav-count">${count}</span>` : ''}</button>`).join('')}</nav><div class="sidebar-spacer"></div><div class="sidebar-storage"><div class="row">${icon('folder')} 本地工作空间</div><p>资料保存在本地电脑<br>可在设置中导出备份</p></div><div class="sidebar-foot"><button class="profile" data-action="settings" aria-label="工作室设置"><div class="avatar">${e(data.profile.artist.slice(0, 1))}</div><div><strong>${e(data.profile.artist)}</strong><small>工作台设置</small></div>${icon('settings')}</button></div></aside><div class="shell"><header class="topbar"><div class="breadcrumb">工作空间 ${icon('chevron')}<span>${currentName}</span></div><div class="top-actions"><span class="small muted" id="save-status"><span class="live-dot"></span>已自动保存</span><button class="pill-outline" data-action="settings">本地存储</button>${iconBtn('bell', 'reminders', '截稿提醒')}</div></header><main class="content" id="main-content">${{ home: renderHome, orders: renderOrders, clients: renderClients, calendar: renderCalendar, templates: renderTemplates, tools: renderTools }[page]()}<footer class="footer"><span>${e(data.profile.name)} · 本地工作空间</span><span>数据保存在本地电脑</span></footer></main></div>`;
     updateSaveStatus();
-    if (page === 'tools' && tool) drawCurrentTool();
+    if (page === 'tools' && ['price-list', 'replies'].includes(tool)) extras.afterRender(tool);
+    else if (page === 'tools' && tool) drawCurrentTool();
   }
 
   function intro(_eyebrow, title, desc, action = 'new-order', label = '新建稿件') {
@@ -411,35 +414,35 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
   function eventButton(o, kind = '截止') {
     return `<button class="event" data-action="order-detail" data-id="${o.id}" style="--platform:${platform(o.platform).color}" title="${e(o.title)} · ${e(client(o.client).name)} · ${kind}"><strong>${e(o.title)}</strong><small>${e(client(o.client).name)} · ${kind}</small></button>`;
   }
+  function scheduleStylePicker() {
+    const value = data.scheduleView || 'deadline';
+    return `<div class="schedule-style-picker"><span>展示样式</span><div class="schedule-style-options" role="group" aria-label="排期展示样式">${[['deadline', '仅显示截止日'], ['range', '开始至截止日连续色条']].map(([mode, label]) => `<button type="button" data-action="schedule-view" data-view="${mode}" class="${value === mode ? 'active' : ''}" aria-pressed="${value === mode}">${label}</button>`).join('')}</div></div>`;
+  }
+  function renderScheduleRange(orders, start, days = 7, month = null) {
+    const weeks = calendarRangeWeeks(orders, dateStr(start), days);
+    return `<div class="schedule-range ${month === null ? 'schedule-range-home' : 'schedule-range-month'}">${month !== null ? `<div class="schedule-range-weekdays">${['周一', '周二', '周三', '周四', '周五', '周六', '周日'].map((day) => `<div class="weekday">${day}</div>`).join('')}</div>` : ''}${weeks.map((segments, week) => `<div class="schedule-range-week"><div class="schedule-range-days">${Array.from({ length: 7 }, (_, i) => {
+      const day = addDays(start, week * 7 + i), value = dateStr(day);
+      return `<div class="schedule-range-day ${value === today() ? 'today' : ''} ${month !== null && day.getMonth() !== month ? 'outside' : ''}" data-action="day-detail" data-date="${value}">${month === null ? `<div class="day-heading"><span>周${'一二三四五六日'[i]}</span><span class="day-number">${String(day.getDate()).padStart(2, '0')}</span></div>` : `<span class="range-date">${day.getDate()}</span>`}</div>`;
+    }).join('')}</div><div class="schedule-range-tracks" style="--range-lanes:${Math.max(1, ...segments.map((segment) => segment.lane + 1))}">${segments.map(({ order: o, lane, column, span, continuesBefore, continuesAfter }) => {
+      const p = platform(o.platform), title = `${o.title} · ${client(o.client).name} · ${shortDate(o.start)}开始 — ${shortDate(o.due)}截稿 · ${o.status}`;
+      return `<button type="button" class="schedule-range-event ${continuesBefore ? 'continues-before' : ''} ${continuesAfter ? 'continues-after' : ''} ${o.status === '退单' ? 'canceled' : ''}" data-action="order-detail" data-id="${o.id}" data-range-column="${column}" data-range-span="${span}" style="grid-column:${column} / span ${span};grid-row:${lane + 1};--platform:${p.color};color:${contrast(p.color)}" title="${e(title)}" aria-label="${e(title)}"><strong>${e(o.title)}</strong><small>${e(client(o.client).name)}</small></button>`;
+    }).join('') || '<span class="schedule-range-empty">暂无安排</span>'}</div></div>`).join('')}</div>`;
+  }
   function stagesHTML(o) {
     const idx = o.stages.indexOf(o.status);
     return `<div class="stages">${o.stages.map((s, i) => `<button class="stage ${i < idx ? 'done' : ''} ${i === idx ? 'active' : ''}" data-action="set-stage" data-id="${o.id}" data-stage="${e(s)}" title="切换到${e(s)}"><span class="stage-ball">${i < idx ? icon('check') : ''}</span>${e(s)}</button>`).join('')}</div>`;
   }
   function renderHome() {
-    const d = addDays(monday(now()), weekOffset * 7),
-      end = addDays(d, 6);
+    const d = addDays(monday(now()), weekOffset * 7), end = addDays(d, 6);
     const active = data.orders.filter((o) => !['完成', '退单'].includes(o.status));
     const current = data.orders.find((o) => o.id === data.current) || active[0] || data.orders[0];
-    return (
-      intro(
-        '',
-        '工作概览',
-        `${shortDate(today())}，星期${'日一二三四五六'[now().getDay()]} · 查看本周排期与当前稿件。`,
-      ) +
-      `<section class="panel week-panel"><div class="panel-header"><div class="panel-title">${icon('calendar')}<h2>本周排期<span class="panel-subtitle">开始日期与截稿日期</span></h2></div><div class="week-toolbar"><strong>${d.getMonth() + 1}.${String(d.getDate()).padStart(2, '0')} — ${end.getMonth() + 1}.${String(end.getDate()).padStart(2, '0')}</strong>${iconBtn('left', 'week-prev', '上一周')}${btn('本周', 'week-today', 'small')}${iconBtn('chevron', 'week-next', '下一周')}</div></div><div class="week-grid">${Array.from(
-        { length: 7 },
-        (_, i) => {
-          const dd = addDays(d, i),
-            s = dateStr(dd);
-          const events = active.flatMap((o) => [
-            ...(o.start === s ? [{ o, kind: '开始' }] : []),
-            ...(o.due === s ? [{ o, kind: '截稿' }] : []),
-          ]);
-          return `<div class="week-day ${s === today() ? 'today' : ''}"><div class="day-heading"><span>周${'一二三四五六日'[i]}</span><span class="day-number">${String(dd.getDate()).padStart(2, '0')}</span></div>${events.map((x) => eventButton(x.o, x.kind)).join('') || '<div class="no-event">暂无安排</div>'}</div>`;
-        },
-      ).join(
-        '',
-      )}</div><div class="row week-legend"><span class="grow">${icon('clock')} 开始 / 截稿</span><div class="legend">${legend()}</div>${btn('查看月历 ' + icon('arrow'), 'nav', 'small', 'data-page="calendar"')}</div></section>` +
+    const range = data.scheduleView === 'range';
+    const schedule = range ? renderScheduleRange(active, d) : `<div class="week-grid">${Array.from({ length: 7 }, (_, i) => {
+      const dd = addDays(d, i), s = dateStr(dd), orders = active.filter((o) => o.due === s);
+      return `<div class="week-day ${s === today() ? 'today' : ''}"><div class="day-heading"><span>周${'一二三四五六日'[i]}</span><span class="day-number">${String(dd.getDate()).padStart(2, '0')}</span></div>${orders.map((o) => eventButton(o, '截稿')).join('') || '<div class="no-event">暂无安排</div>'}</div>`;
+    }).join('')}</div>`;
+    return (intro('', '工作概览', `${shortDate(today())}，星期${'日一二三四五六'[now().getDay()]} · 查看本周排期与当前稿件。`) +
+      `<section class="panel week-panel"><div class="panel-header"><div class="panel-title">${icon('calendar')}<h2>本周排期<span class="panel-subtitle">${range ? '完整制作周期' : '截止日期'}</span></h2></div><div class="week-toolbar"><strong>${d.getMonth() + 1}.${String(d.getDate()).padStart(2, '0')} — ${end.getMonth() + 1}.${String(end.getDate()).padStart(2, '0')}</strong>${iconBtn('left', 'week-prev', '上一周')}${btn('本周', 'week-today', 'small')}${iconBtn('chevron', 'week-next', '下一周')}</div></div><div class="schedule-style-row">${scheduleStylePicker()}</div><div class="schedule-week-scroll">${schedule}</div><div class="row week-legend"><span class="grow">${icon('clock')} ${range ? '从开始日到截止日连续展示' : '仅显示截稿日'}</span><div class="legend">${legend()}</div>${btn('查看月历 ' + icon('arrow'), 'nav', 'small', 'data-page="calendar"')}</div></section>` +
       `<section class="panel current-panel"><div class="panel-header"><div class="current-title"><i class="tiny-dot"></i><h2>当前稿件</h2>${current ? `<span class="badge">${e(current.status)}</span>` : ''}</div><div class="row">${current ? btn('切换稿件', 'choose-current', 'small') : ''}${current ? iconBtn('edit', 'edit-order', '编辑当前稿件', `data-id="${current.id}"`) : ''}</div></div>${current ? renderCurrent(current) : `<div class="empty">${icon('image')}<p>尚未选择当前稿件。</p><br>${btn('新建稿件', 'new-order', 'green')}</div>`}</section>`
     );
   }
@@ -485,6 +488,9 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
   function toolbar(type) {
     return `<div class="toolbar"><label class="searchbox">${icon('search')}<input id="list-search" placeholder="${type === 'clients' ? '搜索单主名称、偏好…' : '搜索稿件、单主或类别…'}" value="${e(search)}" aria-label="搜索"></label><select class="filter" id="platform-filter" aria-label="筛选平台"><option value="">全部平台</option>${platformOptions(platformFilter)}</select>${type === 'orders' ? `<select class="filter" id="status-filter" aria-label="筛选状态"><option value="">全部状态</option>${[...new Set(['未开始', '草稿', '线稿', '上色', '成图', '完成', '退单', ...data.orders.flatMap((o) => o.stages)])].map((s) => `<option ${s === statusFilter ? 'selected' : ''}>${e(s)}</option>`).join('')}</select>` : ''}<span class="grow"></span><span class="toolbar-count">${selected.size ? `已选择 ${selected.size} 项` : ''}</span>${btn(icon('settings') + '平台管理', 'platform-manager', 'small')}${btn('全选', 'select-all', 'small', `data-type="${type}"`)}</div>${selected.size ? `<div class="batchbar">${icon('check')} 已选择 ${selected.size} 项<span class="grow"></span>${btn('取消选择', 'deselect-all', 'small')}${btn(icon('trash') + '删除所选', 'delete-selected', 'small danger', `data-type="${type}"`)}</div>` : ''}`;
   }
+  function platformCategories(type) {
+    return `<div class="platform-categories">${btn('全部平台', 'filter-platform', `small ${!platformFilter ? 'active' : ''}`, 'data-platform=""')}${data.platforms.map((p) => `<button type="button" data-action="filter-platform" data-platform="${p.id}" class="platform-category ${platformFilter === p.id ? 'active' : ''}" style="--platform:${p.color};color:${contrast(p.color)}"><span>${e(p.name)}</span><small>${data[type].filter((item) => item.platform === p.id).length}</small></button>`).join('')}</div>`;
+  }
   function platformOptions(value) {
     return data.platforms
       .map(
@@ -493,19 +499,30 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
       .join('');
   }
   function renderOrders() {
-    const items = filtered(data.orders).sort((a, b) => a.due.localeCompare(b.due));
+    const items = filtered(data.orders);
+    const active = paginate(sortActive(items.filter((o) => !ended(o))), activePage, 20);
+    const closed = paginate(sortEnded(items.filter(ended)), endedPage, 50);
+    activePage = active.page; endedPage = closed.page;
+    const section = (slice, finished) => `<section class="panel order-section ${finished ? 'ended-orders' : 'active-orders'}" data-order-section="${finished ? 'ended' : 'active'}"><div class="order-section-head"><div><h2>${finished ? '已结束稿件' : '进行中稿件'} <span>${slice.total}</span></h2><p>${finished ? '最近结束在前 · 历史记录无结束时间时按截稿日期排列' : '按截稿日期从近到远排列'}</p></div><small>每页 ${finished ? 50 : 20} 条</small></div><div class="compact-orders">${slice.items.map((o) => `<article class="compact-order" data-action="order-detail" data-id="${o.id}" style="--platform:${platform(o.platform).color}"><div class="order-platform-fill" style="color:${contrast(platform(o.platform).color)}"><strong>${e(platform(o.platform).name)}</strong><small>${e(o.status)}</small></div><input type="checkbox" class="entity-select" data-id="${o.id}" ${selected.has(o.id) ? 'checked' : ''} aria-label="选择${e(o.title)}">${o.showImages && o.images[0] ? `<img class="compact-order-image" src="${e(o.images[0])}" alt="参考图">` : ''}<div class="compact-order-main"><h3>${e(o.title)}</h3><small>${e(client(o.client).name)} · ${e(o.category)}</small></div><div class="compact-order-date"><strong>${shortDate(o.due)}</strong><small>${finished ? '截稿日期' : o.due < today() ? '已逾期' : '截稿日期'}</small></div><div class="compact-order-price"><strong>${money(gross(o))}</strong><small>${o.paid ? '已结清' : '未结清'}</small></div>${iconBtn('edit', 'edit-order', '编辑稿件', `data-id="${o.id}"`)}</article>`).join('') || '<div class="empty">暂无符合条件的稿件。</div>'}</div>${paginationHTML(slice, finished ? 'ended' : 'active')}</section>`;
     return (
       intro('', '稿件管理', '统一管理稿件信息、制作进度与交付日期。') +
-      toolbar('orders') +
-      `<section class="panel list-panel"><div class="table-wrap"><table class="data-table"><thead><tr><th><input type="checkbox" data-action="select-all-check" data-type="orders" aria-label="全选稿件" ${items.length && items.every((o) => selected.has(o.id)) ? 'checked' : ''}></th><th>稿件 / 项目名称</th><th>单主</th><th>平台</th><th>截稿日期</th><th>创作状态</th><th>稿件金额</th><th></th></tr></thead><tbody>${items.map((o) => `<tr data-action="order-detail" data-id="${o.id}"><td><input type="checkbox" class="entity-select" data-id="${o.id}" ${selected.has(o.id) ? 'checked' : ''} aria-label="选择${e(o.title)}"></td><td><div class="row">${o.images[0] ? `<span class="thumb"><img src="${e(o.images[0])}" alt=""></span>` : `<span class="thumb" style="display:grid;place-items:center;color:#b7b7b7">${icon('image')}</span>`}<div><span class="cell-title">${e(o.title)}</span><small>${e(o.category)} · ${shortDate(o.start)}开始</small></div></div></td><td>${e(client(o.client).name)}</td><td><span class="platform-tag" style="--platform:${platform(o.platform).color}"><i class="dot"></i>${e(platform(o.platform).name)}</span></td><td>${shortDate(o.due)}${o.due < today() && !['完成', '退单'].includes(o.status) ? '<span class="badge pink" style="margin-left:5px">已逾期</span>' : ''}</td><td><span class="badge ${o.status === '退单' ? 'pink' : o.status === '未开始' ? 'neutral' : ''}">${e(o.status)}</span></td><td>${money(gross(o))}<br><small>${o.paid ? '已结清' : '已收定金 ' + money(o.deposit)}</small></td><td>${iconBtn('edit', 'edit-order', '编辑稿件', `data-id="${o.id}"`)}</td></tr>`).join('')}</tbody></table></div>${!items.length ? '<div class="empty">没有符合条件的稿件，试试其他关键词。</div>' : ''}<div class="table-total">共 ${items.length} 份稿件 · 平台标识同步显示在日历中</div></section>`
+      toolbar('orders') + platformCategories('orders') +
+      section(active, false) + section(closed, true)
     );
+  }
+  function contrast(hex) {
+    const c = String(hex).replace('#', '');
+    return .2126 * parseInt(c.slice(0, 2), 16) + .7152 * parseInt(c.slice(2, 4), 16) + .0722 * parseInt(c.slice(4), 16) > 155 ? '#242424' : '#ffffff';
+  }
+  function paginationHTML(slice, group) {
+    return `<div class="pagination"><span>共 ${slice.total} 条</span><div>${btn('上一页', 'order-page', 'small', `data-group="${group}" data-page="${slice.page - 1}" ${slice.page <= 1 ? 'disabled' : ''}`)}<span>第 ${slice.page} / ${slice.pages} 页</span>${btn('下一页', 'order-page', 'small', `data-group="${group}" data-page="${slice.page + 1}" ${slice.page >= slice.pages ? 'disabled' : ''}`)}</div></div>`;
   }
   function clientGradient(c) {
     const cols = c.platforms.map((id) => platform(id).color);
     return cols.length > 1 ? `linear-gradient(90deg,${cols.join(',')})` : cols[0] || '#e1e1e1';
   }
   function renderClients() {
-    const items = filtered(data.clients);
+    const items = sortedClients(filtered(data.clients), data.orders);
     return (
       intro('', '单主管理', '管理单主资料、沟通要求及关联稿件。', 'new-client', '新建单主') +
       toolbar('clients') +
@@ -523,11 +540,8 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
 
   function renderTemplates() {
     const items = filtered(data.templates);
-    return (
-      intro('', '稿件模板', '保存常用的稿件类型、价格和制作流程。', 'new-template', '新建模板') +
-      toolbar('templates') +
-      `<div class="cards-grid">${items.map((t) => `<article class="entity-card template-card" data-action="edit-template" data-id="${t.id}" style="--platform:${platform(t.platform).color}"><div class="color-strip"></div><div class="template-hero"><img src="${e(t.images[0] || artwork(0))}" alt="${e(t.title)}模板预览"><span class="badge">${e(platform(t.platform).name)}</span><input type="checkbox" class="entity-check entity-select" data-id="${t.id}" aria-label="选择${e(t.title)}" ${selected.has(t.id) ? 'checked' : ''}></div><div class="entity-body"><h3>${e(t.title)}</h3><p>${e(t.category)} · ${t.stages.length} 个流程节点</p><div class="row between"><span class="template-amount">${money(gross(t))}<small> / 起</small></span>${btn('使用模板 ' + icon('arrow'), 'use-template', 'small green', `data-id="${t.id}"`)}</div><div class="entity-bottom" style="margin-top:18px"><span>平台费 ${t.fee}% · 可在稿件中自由修改</span><span>编辑 ${icon('chevron')}</span></div></div></article>`).join('')}</div>${!items.length ? '<div class="panel empty">当前平台暂无稿件模板。</div>' : ''}`
-    );
+    const groups = data.platforms.map((p) => ({ ...p, items: items.filter((t) => t.platform === p.id) })).filter((p) => p.items.length);
+    return intro('', '稿件模板', '按平台保存常用稿件类型、价格和制作流程。', 'new-template', '新建模板') + toolbar('templates') + groups.map((p) => `<section class="platform-template-group" style="--platform:${p.color}"><div class="platform-group-heading"><span style="background:${p.color};color:${contrast(p.color)}">${e(p.name)}</span><small>${p.items.length} 个模板</small></div><div class="compact-template-grid">${p.items.map((t) => `<article class="entity-card compact-template" data-action="edit-template" data-id="${t.id}" style="--platform:${p.color}"><div class="template-platform-fill" style="color:${contrast(p.color)}"><strong>${e(p.name)}</strong><input type="checkbox" class="entity-check entity-select" data-id="${t.id}" aria-label="选择${e(t.title)}" ${selected.has(t.id) ? 'checked' : ''}></div>${t.showImages && t.images[0] ? `<img class="compact-template-image" src="${e(t.images[0])}" alt="${e(t.title)}">` : ''}<div class="compact-template-body"><h3>${e(t.title)}</h3><p>${e(t.category)} · ${t.stages.length} 个流程节点</p><div class="row between"><strong>${money(gross(t))}</strong>${btn('使用模板', 'use-template', 'small', `data-id="${t.id}"`)}</div><small>平台费 ${t.fee}% · 点击编辑</small></div></article>`).join('')}</div></section>`).join('') + (!items.length ? '<div class="panel empty">当前平台暂无稿件模板。</div>' : '');
   }
   function renderCalendar() {
     const y = monthDate.getFullYear(),
@@ -538,9 +552,9 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
         Math.ceil((((new Date(y, m, 1).getDay() + 6) % 7) + new Date(y, m + 1, 0).getDate()) / 7) *
         7;
     const orders = data.orders.filter((o) => !platformFilter || o.platform === platformFilter);
-    const monthOrders = orders.filter((o) => o.due.startsWith(prefix) && o.status !== '退单');
-    const total = monthOrders.reduce((n, o) => n + received(o), 0),
-      expected = monthOrders.reduce((n, o) => n + net(o), 0);
+    const monthOrders = orders.filter((o) => o.due.startsWith(prefix));
+    const visibleCount = data.scheduleView === 'range' ? orders.filter((o) => o.start <= dateStr(new Date(y, m + 1, 0)) && o.due >= `${prefix}-01`).length : monthOrders.length;
+    const totals = monthIncome(monthOrders, prefix), total = totals[incomeMode], expected = totals.predicted;
     const groups = (key, mapper) => {
       const obj = {};
       monthOrders.forEach((o) => {
@@ -554,13 +568,13 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
                 ? platform(id).color
                 : ['#cfcfcf', '#cacaca', '#d8d8d8', '#d9d9d9'][Object.keys(obj).length % 4],
           };
-        obj[id].value += received(o);
+        obj[id].value += incomeMode === 'predicted' || o.status === '完成' ? gross(o) : 0;
       });
       return Object.values(obj).sort((a, b) => b.value - a.value);
     };
     return (
-      intro('', '日历展示', '按截止日期查看稿件排期，统计当月收入。') +
-      `<div class="toolbar"><select class="filter" id="platform-filter" aria-label="日历平台筛选"><option value="">全部平台</option>${platformOptions(platformFilter)}</select><span class="grow"></span>${btn(icon('settings') + '平台标识', 'platform-manager', 'small')}</div><section class="panel"><div class="calendar-header"><div class="month-title">${y}年${m + 1}月<small>截稿日程</small></div><div class="row">${iconBtn('left', 'month-prev', '上个月')}${btn('本月', 'month-today', 'small')}${iconBtn('chevron', 'month-next', '下个月')}</div></div><div class="month-scroll"><div class="month-grid">${['周一', '周二', '周三', '周四', '周五', '周六', '周日'].map((s) => `<div class="weekday">${s}</div>`).join('')}${Array.from(
+      intro('', '日历展示', '选择排期展示样式，查看稿件日程与当月收入。') +
+      `<div class="toolbar"><select class="filter" id="platform-filter" aria-label="日历平台筛选"><option value="">全部平台</option>${platformOptions(platformFilter)}</select>${scheduleStylePicker()}<span class="grow"></span>${btn(icon('settings') + '平台标识', 'platform-manager', 'small')}</div><section class="panel"><div class="calendar-header"><div class="month-title">${y}年${m + 1}月<small>${data.scheduleView === 'range' ? '制作周期' : '截稿日程'}</small></div><div class="row">${iconBtn('left', 'month-prev', '上个月')}${btn('本月', 'month-today', 'small')}${iconBtn('chevron', 'month-next', '下个月')}</div></div><div class="month-scroll">${data.scheduleView === 'range' ? renderScheduleRange(orders, start, days, m) : `<div class="month-grid">${['周一', '周二', '周三', '周四', '周五', '周六', '周日'].map((s) => `<div class="weekday">${s}</div>`).join('')}${Array.from(
         { length: days },
         (_, i) => {
           const d = addDays(start, i),
@@ -570,10 +584,10 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
         },
       ).join(
         '',
-      )}</div></div><div class="calendar-foot"><div class="legend">${legend()}</div><span class="small muted">${monthOrders.length} 份稿件 · 点击空白日期新增排期</span></div></section><section class="income-section"><div class="income-title"><div><div class="eyebrow">收入统计</div><h2 style="margin-top:7px">${m + 1}月收入</h2><div class="income-total">${money(total)}<small>本月实收净额</small></div></div><span class="badge">预计净收入 ${money(expected)}</span></div><p class="settings-note" style="margin:-6px 0 18px">按截稿月份归集，实收为已结清订单的全款或未结清订单的定金，均扣除平台费；退单不计入。</p><div class="income-cards"><article class="stat-card"><h3>平台收入</h3>${renderDonut(
+      )}</div>`}</div><div class="calendar-foot"><div class="legend">${legend()}</div><span class="small muted">${visibleCount} 份稿件 · 点击日期查看或新增排期</span></div></section><section class="income-section"><div class="income-title"><div><div class="eyebrow">收入统计</div><h2 style="margin-top:7px">${m + 1}月收入</h2><div class="income-switch"><button data-action="income-mode" data-mode="actual" class="${incomeMode === 'actual' ? 'active' : ''}">实际收入</button><button data-action="income-mode" data-mode="predicted" class="${incomeMode === 'predicted' ? 'active' : ''}">预测收入</button></div></div><div class="income-summary"><div data-income="actual"><span>实际收入 · 已完成订单</span><strong>${money(totals.actual)}</strong></div><div data-income="predicted"><span>预测收入 · 月内全部订单</span><strong>${money(expected)}</strong></div></div></div><p class="settings-note" style="margin:-6px 0 18px">按截稿月份归集，金额包含额外服务，未扣平台费。实际收入仅计已完成订单；预测收入计月内全部订单（包含退单）。下方图表随所选收入类型切换。</p><div class="income-cards"><article class="stat-card"><h3>平台收入</h3>${renderDonut(
         groups('platform', (id) => platform(id).name),
         total,
-      )}</article><article class="stat-card"><h3>稿件类别收入</h3><span class="muted">按稿件类别 · 实收</span>${renderBars(groups('category', (id) => id))}</article><article class="stat-card"><h3>单主收入</h3><span class="muted">按单主 · 实收</span>${renderBars(groups('client', (id) => client(id).name))}</article></div></section>`
+      )}</article><article class="stat-card"><h3>稿件类别收入</h3><span class="muted">按稿件类别 · ${incomeMode === 'actual' ? '实际收入' : '预测收入'}</span>${renderBars(groups('category', (id) => id))}</article><article class="stat-card"><h3>单主收入</h3><span class="muted">按单主 · ${incomeMode === 'actual' ? '实际收入' : '预测收入'}</span>${renderBars(groups('client', (id) => client(id).name))}</article></div></section>`
     );
   }
   function renderBars(groups) {
@@ -603,6 +617,8 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
     receipt: '交付小票',
     card: '会员卡',
     layout: '例图排版',
+    'price-list': '价目表',
+    replies: '快捷回复',
   };
   function renderTools() {
     if (tool) return renderToolEditor();
@@ -623,6 +639,8 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
         ],
         ['card', 'card', '会员卡', '编辑会员信息、卡号和卡面，保存模板并导出图片。'],
         ['layout', 'image', '例图排版', '在画布中移动、缩放和排列图片，保存布局并导出排版结果。'],
+        ['price-list', 'templates', '价目表', '组合大图价目条目，拖动模板调整排列，复制图片或导出 JPG。'],
+        ['replies', 'orders', '快捷回复', '按层级整理文字，关联多个稿件模板，快速复制和编辑。'],
       ]
         .map(
           ([id, ic, title, desc], i) =>
@@ -657,6 +675,7 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
     }
   }
   function renderToolEditor() {
+    if (tool === 'price-list' || tool === 'replies') return extras.render(tool);
     const title = toolNames[tool];
     const top = `<div class="row" style="margin-bottom:20px">${btn(icon('left') + '全部组件', 'tools-back', 'small')}<span class="grow"></span><span class="settings-note"></span></div>`;
     const header = intro(
@@ -835,6 +854,7 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
           images: [],
           paid: false,
           created: today(),
+          showImages: false,
         },
     );
     modal = { type: isTemplate ? 'template-editor' : 'order-editor', isNew: !source };
@@ -844,11 +864,11 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
     const isTemplate = modal.type === 'template-editor',
       o = draft,
       p = platform(o.platform),
-      filteredClients = data.clients.filter((c) => c.platforms.includes(o.platform)),
+      filteredClients = sortedClients(data.clients.filter((c) => c.platforms.includes(o.platform)), data.orders),
       templates = data.templates.filter((t) => t.platform === o.platform);
     showModal(
       `${modal.isNew ? '新建' : '编辑'}${isTemplate ? '稿件模板' : '稿件'}`,
-      `<form id="order-form"><div class="modal-section"><div class="section-label"><span class="number">01</span> 基本信息</div><div class="form-grid"><label class="field"><span>所属平台 *</span><div class="field-inline"><select name="platform" required><option value="">选择平台</option>${platformOptions(o.platform)}</select>${iconBtn('plus', 'inline-platform', '新建平台')}</div></label>${!isTemplate ? `<label class="field"><span>快速使用模板（可选）</span><select id="order-template"><option value="">从空白稿件开始</option>${templates.map((t) => `<option value="${t.id}">${e(t.title)}</option>`).join('')}</select></label>` : ''}</div><div id="inline-platform-form" class="hidden" style="padding:15px;background:#f8f8f8;border-radius:9px;margin-top:15px"><div class="form-grid"><label class="field"><span>新平台名称</span><input id="new-platform-name" maxlength="24" placeholder="平台名称"></label><label class="field"><span>标识灰度</span><input type="color" id="new-platform-color" value="#cecece"></label><label class="field"><span>默认平台费 / %</span><input type="number" id="new-platform-fee" min="0" max="100" value="0"></label><div class="row" style="align-items:end">${btn('添加并选择', 'save-inline-platform', 'small green')}</div></div></div><div class="form-grid" style="margin-top:15px"><label class="field ${isTemplate ? 'full' : ''}"><span>${isTemplate ? '模板' : '稿件'}名称 *</span><input name="title" required maxlength="100" value="${e(o.title)}" placeholder="请输入名称"></label>${!isTemplate ? `<label class="field"><span>单主 *</span><div class="field-inline"><select name="client" required><option value="">选择此平台的单主</option>${filteredClients.map((c) => `<option value="${c.id}" ${c.id === o.client ? 'selected' : ''}>${e(c.name)}</option>`).join('')}</select>${iconBtn('plus', 'quick-client', '新建单主')}</div></label>` : ''}<label class="field"><span>稿件类别 *</span><div class="field-inline"><input name="category" required maxlength="40" value="${e(o.category)}" placeholder="输入新类别">${
+      `<form id="order-form"><div class="modal-section"><div class="section-label"><span class="number">01</span> 基本信息</div><div class="form-grid"><label class="field"><span>所属平台 *</span><div class="field-inline"><select name="platform" required><option value="">选择平台</option>${platformOptions(o.platform)}</select>${iconBtn('plus', 'inline-platform', '新建平台')}</div></label>${!isTemplate ? `<label class="field"><span>快速使用模板（可选）</span><select id="order-template"><option value="">从空白稿件开始</option>${templates.map((t) => `<option value="${t.id}">${e(t.title)}</option>`).join('')}</select></label>` : ''}</div><div id="inline-platform-form" class="hidden" style="padding:15px;background:#f8f8f8;border-radius:9px;margin-top:15px"><div class="form-grid"><label class="field"><span>新平台名称</span><input id="new-platform-name" maxlength="24" placeholder="平台名称"></label><label class="field"><span>平台颜色</span><input type="color" id="new-platform-color" value="#cecece"></label><label class="field"><span>默认平台费 / %</span><input type="number" id="new-platform-fee" min="0" max="100" value="0"></label><div class="row" style="align-items:end">${btn('添加并选择', 'save-inline-platform', 'small green')}</div></div></div><div class="form-grid" style="margin-top:15px"><label class="field ${isTemplate ? 'full' : ''}"><span>${isTemplate ? '模板' : '稿件'}名称 *</span><input name="title" required maxlength="100" value="${e(o.title)}" placeholder="请输入名称"></label>${!isTemplate ? `<label class="field"><span>单主 *</span><div class="field-inline"><select name="client" required><option value="">选择此平台的单主</option>${filteredClients.map((c) => `<option value="${c.id}" ${c.id === o.client ? 'selected' : ''}>${e(c.name)}</option>`).join('')}</select>${iconBtn('plus', 'quick-client', '新建单主')}</div></label>` : ''}<label class="field"><span>稿件类别 *</span><div class="field-inline"><input name="category" required maxlength="40" value="${e(o.category)}" placeholder="输入新类别">${
         categoryChoices(data).length
           ? `<select id="category-choice" aria-label="选择已保存的稿件类别"><option value="">选择已有类别</option>${categoryChoices(
               data,
@@ -867,7 +887,7 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
               .map((s) => `<option ${s === o.status ? 'selected' : ''}>${e(s)}</option>`)
               .join('')}</select></label></div>`
           : ''
-      }</div><div class="modal-section"><div class="section-label"><span class="number">04</span> ${isTemplate ? '通用要求与示例图' : '设定、要求与参考图'}（可选）</div><label class="field"><span>${isTemplate ? '通用稿件说明' : '这份稿件的具体要求'}</span><textarea name="requirements" placeholder="请输入稿件的具体要求">${e(o.requirements)}</textarea></label>${!isTemplate ? `<label class="field"><span>稿件备注</span><textarea name="notes" placeholder="请输入补充备注" style="min-height:54px">${e(o.notes)}</textarea></label>` : ''}<div class="dropzone" data-drop="draft" data-action="upload-draft">${icon('upload')}拖入设定图片 / 点击上传 <span class="small">· 可留空</span></div><div class="upload-previews">${o.images.map((img, i) => `<div class="upload-preview"><img src="${e(img)}" alt="参考图${i + 1}"><button type="button" data-action="remove-draft-image" data-index="${i}" aria-label="移除参考图${i + 1}">×</button></div>`).join('')}</div></div></form>`,
+      }</div><div class="modal-section"><div class="section-label"><span class="number">04</span> ${isTemplate ? '通用要求与示例图' : '设定、要求与参考图'}（可选）</div><label class="field"><span>${isTemplate ? '通用稿件说明' : '这份稿件的具体要求'}</span><textarea name="requirements" placeholder="请输入稿件的具体要求">${e(o.requirements)}</textarea></label>${!isTemplate ? `<label class="field"><span>稿件备注</span><textarea name="notes" placeholder="请输入补充备注" style="min-height:54px">${e(o.notes)}</textarea></label>` : ''}<label class="check-row image-opt-in"><input type="checkbox" name="showImages" ${o.showImages ? 'checked' : ''}> 添加并显示图片</label><p class="hint">默认不显示图片。取消勾选仅隐藏，已有图片会保留。</p>${o.showImages ? `<div class="dropzone" data-drop="draft" data-action="upload-draft">${icon('upload')}拖入设定图片 / 点击上传 <span class="small">· 可留空</span></div><div class="upload-previews">${o.images.map((img, i) => `<div class="upload-preview"><img src="${e(img)}" alt="参考图${i + 1}"><button type="button" data-action="remove-draft-image" data-index="${i}" aria-label="移除参考图${i + 1}">×</button></div>`).join('')}</div>` : ''}</div></form>`,
       `${!modal.isNew ? btn(icon('trash') + '删除', 'delete-draft', 'danger left') : ''}${btn('取消', 'close-modal')}<button type="submit" form="order-form" class="btn primary" id="save-order-btn">${icon('check')} 保存${isTemplate ? '模板' : '稿件'}</button>`,
     );
   }
@@ -895,6 +915,7 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
       if (fd.has(k)) draft[k] = Number(fd.get(k));
     });
     draft.paid = fd.get('paid') === 'on';
+    draft.showImages = fd.get('showImages') === 'on';
     draft.stages = ['未开始', ...fd.getAll('optional-stage'), '成图', '完成'];
     if (modal?.type === 'template-editor') delete draft.duration;
     if (!draft.stages.includes(draft.status) && draft.status !== '退单') draft.status = '未开始';
@@ -926,7 +947,7 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
     const c = draft;
     showModal(
       `${modal.id ? '编辑' : '新建'}单主`,
-      `<form id="client-form"><label class="field"><span>单主名称 *</span><input name="name" maxlength="60" required value="${e(c.name)}" placeholder="请输入单主名称"></label><div class="field"><span>所在平台（可多选）*</span><div class="check-options">${data.platforms.map((p) => `<label class="check-row"><input type="checkbox" name="platforms" value="${p.id}" ${c.platforms.includes(p.id) ? 'checked' : ''}><i class="dot" style="--platform:${p.color}"></i>${e(p.name)}</label>`).join('')}</div>${btn(icon('plus') + '新建平台', 'inline-platform', 'small')}</div><div id="inline-platform-form" class="hidden"><div class="form-grid"><label class="field"><span>平台名称</span><input id="new-platform-name"></label><label class="field"><span>标识灰度</span><input id="new-platform-color" type="color" value="#cccccc"></label></div><input id="new-platform-fee" type="hidden" value="0">${btn('添加并选择', 'save-inline-platform', 'small green')}</div><div class="form-grid" style="margin-top:17px">${[
+      `<form id="client-form"><label class="field"><span>单主名称 *</span><input name="name" maxlength="60" required value="${e(c.name)}" placeholder="请输入单主名称"></label><div class="field"><span>所在平台（可多选）*</span><div class="check-options">${data.platforms.map((p) => `<label class="check-row"><input type="checkbox" name="platforms" value="${p.id}" ${c.platforms.includes(p.id) ? 'checked' : ''}><i class="dot" style="--platform:${p.color}"></i>${e(p.name)}</label>`).join('')}</div>${btn(icon('plus') + '新建平台', 'inline-platform', 'small')}</div><div id="inline-platform-form" class="hidden"><div class="form-grid"><label class="field"><span>平台名称</span><input id="new-platform-name"></label><label class="field"><span>平台颜色</span><input id="new-platform-color" type="color" value="#cccccc"></label></div><input id="new-platform-fee" type="hidden" value="0">${btn('添加并选择', 'save-inline-platform', 'small green')}</div><div class="form-grid" style="margin-top:17px">${[
         ['cn', 'CN（选填）'],
         ['salutation', '称呼（选填）'],
         ['platformLink', '平台链接（选填）'],
@@ -1018,7 +1039,7 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
     modal = { type: 'platform-manager' };
     showModal(
       '平台管理',
-      `<p class="settings-note">修改标识灰度后，稿件、日历、模板与单主色条会一起更新。费率是新建稿件的默认值，已有稿件保留原费率。</p><form id="platform-form">${data.platforms.map((p) => `<div class="platform-manager-row" data-id="${p.id}"><input name="color" type="color" value="${p.color}" aria-label="${e(p.name)}标识灰度"><input name="name" class="platform-name" value="${e(p.name)}" maxlength="24" required aria-label="平台名称"><input name="fee" type="number" value="${p.fee}" min="0" max="100" step="0.01" aria-label="平台费率"><span class="small muted">%</span>${iconBtn('trash', 'delete-platform', '删除平台', `data-id="${p.id}"`)}</div>`).join('')}</form><div class="divider"></div><div class="section-label">新建平台</div><div class="form-grid"><label class="field"><span>名称</span><input id="new-platform-name" maxlength="24"></label><label class="field"><span>标识灰度</span><input id="new-platform-color" type="color" value="#cdcdcd"></label><label class="field"><span>默认费率 / %</span><input id="new-platform-fee" type="number" min="0" max="100" value="0"></label><div class="row" style="align-items:end">${btn('添加平台', 'save-inline-platform', 'small green')}</div></div>`,
+      `<p class="settings-note">修改平台颜色后，稿件、日历、模板与单主色条会一起更新。费率是新建稿件的默认值，已有稿件保留原费率。</p><form id="platform-form">${data.platforms.map((p) => `<div class="platform-manager-row" data-id="${p.id}"><input name="color" type="color" value="${p.color}" aria-label="${e(p.name)}平台颜色"><input name="name" class="platform-name" value="${e(p.name)}" maxlength="24" required aria-label="平台名称"><input name="fee" type="number" value="${p.fee}" min="0" max="100" step="0.01" aria-label="平台费率"><span class="small muted">%</span>${iconBtn('trash', 'delete-platform', '删除平台', `data-id="${p.id}"`)}</div>`).join('')}</form><div class="divider"></div><div class="section-label">新建平台</div><div class="form-grid"><label class="field"><span>名称</span><input id="new-platform-name" maxlength="24"></label><label class="field"><span>平台颜色</span><input id="new-platform-color" type="color" value="#cdcdcd"></label><label class="field"><span>默认费率 / %</span><input id="new-platform-fee" type="number" min="0" max="100" value="0"></label><div class="row" style="align-items:end">${btn('添加平台', 'save-inline-platform', 'small green')}</div></div>`,
       btn('关闭', 'close-modal') +
         `<button type="submit" form="platform-form" class="btn primary">保存修改</button>`,
       'narrow',
@@ -1049,6 +1070,7 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
     search = '';
     platformFilter = '';
     statusFilter = '';
+    activePage = endedPage = 1;
     location.hash = next;
     render();
     window.scrollTo(0, 0);
@@ -1087,6 +1109,7 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
   async function deleteEntities(type, ids) {
     if (type === 'clients') archiveClients(ids);
     else data[type] = data[type].filter((o) => !ids.has(o.id));
+    if (type === 'templates') data.replyTemplates.forEach((reply) => { reply.templateIds = reply.templateIds.filter((id) => !ids.has(id)); });
     selected.clear();
     if (ids.has(data.current))
       data.current =
@@ -1101,6 +1124,32 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
   async function handleAction(action, el) {
     const id = el.dataset.id;
     switch (action) {
+      case 'schedule-view': {
+        const view = el.dataset.view;
+        if (!['deadline', 'range'].includes(view) || view === data.scheduleView || pendingSaves || failedSave) return;
+        const previous = data.scheduleView || 'deadline';
+        data.scheduleView = view;
+        el.disabled = true;
+        if (!(await persist())) { data.scheduleView = previous; render(); return; }
+        render();
+        break;
+      }
+      case 'filter-platform':
+        platformFilter = el.dataset.platform;
+        activePage = endedPage = 1;
+        selected.clear();
+        render();
+        break;
+      case 'order-page':
+        if (el.dataset.group === 'ended') endedPage = Number(el.dataset.page);
+        else activePage = Number(el.dataset.page);
+        render();
+        $(`[data-order-section="${el.dataset.group}"]`)?.scrollIntoView({ block: 'start' });
+        break;
+      case 'income-mode':
+        incomeMode = el.dataset.mode;
+        render();
+        break;
       case 'nav':
         navigate(el.dataset.page);
         break;
@@ -1215,7 +1264,9 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
       case 'set-stage': {
         const o = data.orders.find((o) => o.id === id);
         if (!o) return;
+        const previous = clone(o);
         o.status = el.dataset.stage;
+        updateOrderDates(o, previous);
         if (!(await persist())) return;
         render();
         if (modal?.type === 'order-detail') showOrderDetail(id);
@@ -1306,7 +1357,7 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
         break;
       case 'save-inline-platform': {
         const name = $('#new-platform-name').value.trim(),
-          color = grayColor($('#new-platform-color').value),
+          color = $('#new-platform-color').value,
           fee = Number($('#new-platform-fee').value);
         if (!name) {
           toast('请输入平台名称');
@@ -1432,12 +1483,14 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
       case 'day-detail': {
         const s = el.dataset.date,
           items = data.orders.filter(
-            (o) => o.due === s && (!platformFilter || o.platform === platformFilter),
+            (o) => (data.scheduleView === 'range' ? o.start <= s && o.due >= s : o.due === s) &&
+              (!platformFilter || o.platform === platformFilter) &&
+              (page !== 'home' || !['完成', '退单'].includes(o.status)),
           );
         modal = { type: 'day', date: s };
         showModal(
-          shortDate(s) + '的截稿安排',
-          `<div class="detail-link-list">${items.map((o) => `<button class="detail-link" data-action="order-detail" data-id="${o.id}" style="--platform:${platform(o.platform).color}"><span>${e(o.title)} · ${e(client(o.client).name)}</span><span class="badge">${e(o.status)}</span></button>`).join('') || '<p class="empty">当日暂无截稿安排。</p>'}</div>`,
+          shortDate(s) + '的稿件安排',
+          `<div class="detail-link-list">${items.map((o) => `<button class="detail-link" data-action="order-detail" data-id="${o.id}" style="--platform:${platform(o.platform).color}"><span>${e(o.title)} · ${e(client(o.client).name)}</span><span class="badge">${e(o.status)}</span></button>`).join('') || '<p class="empty">当日暂无稿件安排。</p>'}</div>`,
           btn('在这天新增稿件', 'new-order-day', 'green', `data-date="${s}"`),
           'narrow',
         );
@@ -1667,7 +1720,7 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
       case 'clear-data':
         confirmAction(
           '清空工作台记录？',
-          '将清空稿件、单主、模板、素材与水印。平台和工作室设置会保留。建议先导出备份。',
+          '将清空稿件、单主、模板、素材、水印、价目表和快捷回复。平台和工作室设置会保留。建议先导出备份。',
           async () => {
             data.orders = [];
             data.clients = [];
@@ -1675,6 +1728,11 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
             data.templates = [];
             data.assets = [];
             data.toolTemplates = [];
+            data.priceEntries = [];
+            data.priceLists = [];
+            data.replyFolders = [];
+            data.replyTemplates = [];
+            extras.reset();
             data.current = '';
             delete data.watermarkMark;
             watermark.mark = null;
@@ -1690,6 +1748,7 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
       case 'reset-data':
         confirmAction('重置为空白？', '当前记录将清空，请先导出需要保留的资料。', async () => {
           data = initialData();
+          extras.reset();
           watermark.mark = null;
           watermark.image = null;
           if (!(await persist())) return;
@@ -1773,6 +1832,7 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
       }
       const arr = isTemplate ? data.templates : data.orders,
         idx = arr.findIndex((o) => o.id === draft.id);
+      if (!isTemplate) updateOrderDates(draft, idx >= 0 ? arr[idx] : null);
       if (idx >= 0) arr[idx] = clone(draft);
       else arr.push(clone(draft));
       if (!isTemplate && !data.current) data.current = draft.id;
@@ -1798,6 +1858,7 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
       const prev = modal.previous,
         newClient = clone(draft),
         idx = data.clients.findIndex((c) => c.id === newClient.id);
+      if (idx < 0) newClient.createdAt ||= new Date().toISOString();
       if (idx < 0) data.clients.push(newClient);
       else data.clients[idx] = newClient;
       data.archivedClients = (data.archivedClients || []).filter((c) => c.id !== newClient.id);
@@ -1821,7 +1882,7 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
       rows.forEach((r) => {
         const p = data.platforms.find((p) => p.id === r.dataset.id);
         p.name = $('[name=name]', r).value.trim();
-        p.color = grayColor($('[name=color]', r).value);
+        p.color = $('[name=color]', r).value;
         p.fee = Number($('[name=fee]', r).value);
       });
       if (!(await saveSubmittedForm(form))) return;
@@ -1847,11 +1908,13 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
   document.addEventListener('change', (event) => {
     const el = event.target;
     if (el.id === 'platform-filter') {
+      activePage = endedPage = 1;
       platformFilter = el.value;
       selected.clear();
       render();
     }
     if (el.id === 'status-filter') {
+      activePage = endedPage = 1;
       statusFilter = el.value;
       selected.clear();
       render();
@@ -1876,6 +1939,10 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
         sel.innerHTML = allStages(draft)
           .map((s) => `<option ${s === draft.status ? 'selected' : ''}>${e(s)}</option>`)
           .join('');
+    }
+    if (el.name === 'showImages' && $('#order-form')) {
+      captureDraft();
+      renderOrderEditor();
     }
     if (el.id === 'tool-order') {
       toolConfig.order = el.value;
@@ -1907,6 +1974,7 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
       $('#client-history-list').innerHTML = clientHistoryHTML(modal.id, el.value);
     if (el.id === 'layout-template-name') layoutTemplateName = el.value;
     if (el.id === 'list-search') {
+      activePage = endedPage = 1;
       clearTimeout(searchTimer);
       search = el.value;
       const caret = el.selectionStart;
@@ -2445,6 +2513,7 @@ import { designerControls, drawDesign, bindDesigner, addDesignImages } from './d
         if (failedSave) throw new Error('当前修改未保存，请先导出备份并刷新。');
         await storage.backup();
         data = merge ? mergeBackup(data, candidate) : candidate;
+        extras.reset();
         migrateAppearance();
         watermark.mark = data.watermarkMark || null;
         watermark.image = null;

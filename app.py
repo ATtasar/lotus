@@ -13,7 +13,7 @@ from werkzeug.exceptions import HTTPException
 
 from db import APP_ID, SCHEMA_VERSION, Conflict, Store
 
-DESKTOP_FILES = {"index.html", "styles.css", "app.js", "api.js", "storage.js", "model.js", "design-model.js", "designer.js", "workbench.ico"}
+DESKTOP_FILES = {"index.html", "styles.css", "app.js", "api.js", "storage.js", "model.js", "design-model.js", "designer.js", "workbench.ico", "workbench-model.js", "tools-extra.js"}
 MAX_REQUEST_BYTES = 128 * 1024 * 1024
 
 

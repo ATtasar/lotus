@@ -153,12 +153,14 @@ try {
   const date = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
   await page.locator('[name=due]').fill(date);
   await page.locator('[name=requirements]').fill('电脑端稿件要求');
+  assert.equal(await page.locator('[data-action=upload-draft]').count(), 0);
+  await page.locator('[name=showImages]').check();
   await upload('upload-draft');
   await page.locator('.upload-preview img').waitFor();
   await page.locator('#save-order-btn').click();
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
   await saved();
-  await page.locator('tbody [data-action=order-detail]').first().click();
+  await page.locator('.compact-order[data-action=order-detail]').first().click();
   await action('edit-order');
   await page.locator('[name=notes]').fill('编辑后保存');
   await page.locator('[name=status]').selectOption('草稿');
@@ -180,7 +182,8 @@ try {
     await page.locator('.event strong').filter({ hasText: '本地电脑端稿件' }).count(),
     1,
   );
-  assert.match(await page.locator('.income-total').innerText(), /100/);
+  assert.match(await page.locator('[data-income=actual] strong').innerText(), /¥0/);
+  assert.match(await page.locator('[data-income=predicted] strong').innerText(), /300/);
   await nav('clients');
   await page.locator('[data-action=client-detail]').first().click();
   assert.match(await page.getByRole('dialog').innerText(), /本地电脑端稿件/);
@@ -469,7 +472,7 @@ try {
   for (const status of [500, 200]) {
     await nav('orders');
     const committed = await state();
-    await page.locator('tbody [data-action=order-detail]').first().click();
+    await page.locator('.compact-order[data-action=order-detail]').first().click();
     await action('edit-order');
     await page.locator('[name=notes]').fill('未提交的修改-' + status);
     assert.equal(await page.locator('#save-status').innerText(), '表单有未保存修改');

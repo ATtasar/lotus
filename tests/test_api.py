@@ -49,7 +49,7 @@ def test_desktop_only_routes(client, url):
 def test_original_desktop_resources_and_runtime_config(client):
     client, _ = client
     root = Path(__file__).resolve().parents[1]
-    for name in ("index.html", "styles.css", "app.js", "api.js", "storage.js", "designer.js"):
+    for name in ("index.html", "styles.css", "app.js", "api.js", "storage.js", "designer.js", "tools-extra.js", "workbench-model.js"):
         response = client.get("/" + name, base_url=ORIGIN)
         assert response.data == (root / "desktop" / name).read_bytes()
         assert "connect-src 'self'" in response.headers["Content-Security-Policy"]

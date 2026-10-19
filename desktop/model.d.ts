@@ -5,6 +5,7 @@ export interface DesktopRecord {
 export interface DesktopData {
   version: number;
   appearanceVersion: number;
+  scheduleView?: 'deadline' | 'range';
   categories?: string[];
   platforms: DesktopRecord[];
   clients: DesktopRecord[];
@@ -13,6 +14,10 @@ export interface DesktopData {
   templates: DesktopRecord[];
   assets: DesktopRecord[];
   toolTemplates: DesktopRecord[];
+  priceEntries: DesktopRecord[];
+  priceLists: DesktopRecord[];
+  replyFolders: DesktopRecord[];
+  replyTemplates: DesktopRecord[];
   current: string;
   profile: { name: string; artist: string; tagline: string };
   watermarkMark?: string;
