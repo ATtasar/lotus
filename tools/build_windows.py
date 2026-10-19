@@ -1,4 +1,4 @@
-"""Test -> verify unchanged UI -> standalone EXE -> portable ZIP -> installer."""
+"""Test -> verify reviewed UI manifest -> standalone EXE -> ZIP -> installer."""
 from pathlib import Path
 import os
 import subprocess

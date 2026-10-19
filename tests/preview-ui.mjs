@@ -14,7 +14,12 @@ function pythonRun(args) {
   const result = spawnSync(python, args, { cwd: path.resolve('.'), windowsHide: true, stdio: 'inherit', env: { ...process.env, PYTHONUTF8: '1' } });
   assert.equal(result.status, 0);
 }
-function launch(action, initial = false) { pythonRun(['launcher.py', action, '--data-root', root, ...(initial ? ['--port', String(port), '--no-shortcut'] : []), '--no-browser', '--no-tray']); }
+function launch(action, initial = false) {
+  const exe = process.env.LOTUS_EXE;
+  if (!exe) return pythonRun(['launcher.py', action, '--data-root', root, ...(initial ? ['--port', String(port), '--no-shortcut'] : []), '--no-browser', '--no-tray']);
+  const result = spawnSync(exe, [action, '--data-root', root, ...(initial ? ['--port', String(port), '--no-shortcut'] : []), '--no-browser', '--no-tray'], { cwd: path.resolve('.'), windowsHide: true, stdio: 'inherit', env: { ...process.env, PYTHONUTF8: '1' } });
+  assert.equal(result.status, 0);
+}
 function query(sql, params = []) { return JSON.parse(execFileSync(python, ['tests/sqlite_read.py', root, sql, JSON.stringify(params)], { encoding: 'utf8', env: { ...process.env, PYTHONUTF8: '1' } })); }
 async function state() {
   const { token } = await (await fetch(base + '/local-api/session', { headers: { 'X-Lotus-Local': '1' } })).json();
@@ -68,7 +73,7 @@ try {
   await saved();
   assert.ok((await state()).orders.find((o) => o.id === finishing).completedAt);
   assert.equal(query("SELECT json_extract(payload,'$.status') AS status FROM desktop_records WHERE collection='orders' AND id=?", [finishing])[0].status, '完成');
-  await action('close-modal');
+  await nav('orders');
   assert.equal(await page.locator('.ended-orders .compact-order').first().getAttribute('data-id'), finishing);
   await nav('calendar');
   const incomeData = await state();

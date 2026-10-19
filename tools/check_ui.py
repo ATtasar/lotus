@@ -1,4 +1,4 @@
-"""Fail if the desktop resources differ from the recorded revision hashes."""
+"""Fail if desktop resources differ from the reviewed release manifest."""
 import hashlib
 import json
 from pathlib import Path
@@ -12,7 +12,7 @@ def check():
         file = ROOT / name
         if not file.is_file() or hashlib.sha256(file.read_bytes()).hexdigest() != checksum:
             raise ValueError("现有电脑端资源被修改：" + name)
-    print("PASS: desktop resources match the recorded revision manifest", flush=True)
+    print("PASS: desktop resources match the reviewed release manifest", flush=True)
 
 
 if __name__ == "__main__":

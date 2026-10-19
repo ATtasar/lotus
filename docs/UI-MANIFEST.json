@@ -1,17 +1,17 @@
 {
-  "source": "Local-only desktop preview 2026-10-20: schedule display choice, based on ATtasar/lotus ffc299b",
+  "source": "Lotus 1.3.0: merge desktop preview features with 1.2.0 main; preserve existing desktop UI",
   "files": {
     "desktop/SOURCE.md": "76acce7e85b08a6e4d9f1662f9047e86305e55ec3cbad03889871106d047c054",
     "desktop/api.js": "3fb64f67091a58965fd1f4578f3a620e93d42f8ef0a70d71c90de5ce52227924",
-    "desktop/app.js": "57aff757ee95257714fbd459f4e6263950bbbdf9d57466b5dc18acc941098a14",
+    "desktop/app.js": "bba0ea8ffbfb889ddafeac76ff515ebda0d28c002c03df287fa05f1bb765cc60",
     "desktop/design-model.d.ts": "baf33070bf5596d379f8660ddd3bdc9b1b53e09135ea5bb5f843335ba627422d",
     "desktop/design-model.js": "952f877f3e18435bd70febac20a405030009a25daea99eabe201efb3711f0ac9",
     "desktop/designer.js": "41342f0bdc8e92b83c3c4362a8148f0d02fc9c173bf1550e2f6724c196822d11",
     "desktop/index.html": "467444adfca250cf85e97ddbdb07ac06b914ce16ff9d4b16fba713cb2aaca95a",
     "desktop/model.d.ts": "389638ad6b98eae6a942211f4648a99d4f0d6dc04007a2d58da1f19dd730a8b4",
     "desktop/model.js": "3ae24bed8b1557c255746f27769c1282ffe58d9c9cff9df12c0a36ac782f884e",
-    "desktop/storage.js": "8d08a93f1f39e33a9822da161457b06ab7ebda7b6572afb269f3577c6cd185af",
-    "desktop/styles.css": "56b51abd1dbb78e2f7598a033c97e56faf1b7bf6cbb3ebb04f5230fea846af48",
+    "desktop/storage.js": "9f4e7b56fbaa05552898e6acee829f2b4d9e967332cedbf9f36b67a7c26147be",
+    "desktop/styles.css": "221170b24433d4209d2f17af0fc779144921ce6409c833ebed9b00f9e0dbf6f9",
     "desktop/tools-extra.js": "82fc4f37e6b214f188ef9da04589a9ac08d2a4b13640fbb88c73e4dffe9ae037",
     "desktop/workbench-model.js": "2ec3ed85b95d001fc1cc35bdf5e07c79f588d3f7ec238794fa9844cde5061d0b",
     "desktop/workbench.ico": "1e8acd008d708b1b3cc29f78f449fd552769d86383d1b562ed4270a3cb86555a"

@@ -1,7 +1,9 @@
 from pathlib import Path
 import pytest
 
+import app as app_module
 from app import create_app
+from updates import UpdateCheckError
 from test_storage import fixture
 
 ORIGIN = "http://127.0.0.1:17861"
@@ -46,7 +48,7 @@ def test_desktop_only_routes(client, url):
     assert client.get(url, base_url=ORIGIN, headers=session(client)).status_code == 404
 
 
-def test_original_desktop_resources_and_runtime_config(client):
+def test_desktop_resources_and_runtime_config(client):
     client, _ = client
     root = Path(__file__).resolve().parents[1]
     for name in ("index.html", "styles.css", "app.js", "api.js", "storage.js", "designer.js", "tools-extra.js", "workbench-model.js"):
@@ -54,3 +56,38 @@ def test_original_desktop_resources_and_runtime_config(client):
         assert response.data == (root / "desktop" / name).read_bytes()
         assert "connect-src 'self'" in response.headers["Content-Security-Policy"]
     assert "desktopOnly" in client.get("/runtime-config.js", base_url=ORIGIN).text
+
+
+def test_update_endpoint_uses_packaged_version_and_handles_offline(client, monkeypatch):
+    client, _ = client
+    headers = session(client)
+    info = client.get("/local-api/info", base_url=ORIGIN, headers=headers).json
+    assert info["version"] == (Path(__file__).resolve().parents[1] / "VERSION").read_text().strip()
+
+    monkeypatch.setattr(
+        app_module,
+        "check_for_updates",
+        lambda current: {
+            "currentVersion": current,
+            "latestVersion": "9.0.0",
+            "releaseName": "Lotus 9.0.0",
+            "releaseNotes": "说明",
+            "releaseUrl": "https://github.com/ATtasar/lotus/releases/tag/v9.0.0",
+            "publishedAt": "2026-10-19T00:00:00Z",
+            "updateAvailable": True,
+            "isLatest": False,
+        },
+    )
+    result = client.get("/local-api/update", base_url=ORIGIN, headers=headers)
+    assert result.status_code == 200
+    assert result.json["currentVersion"] == info["version"]
+    assert result.json["updateAvailable"] is True
+
+    monkeypatch.setattr(
+        app_module,
+        "check_for_updates",
+        lambda _current: (_ for _ in ()).throw(UpdateCheckError("网络不可用，软件仍可离线使用。")),
+    )
+    result = client.get("/local-api/update", base_url=ORIGIN, headers=headers)
+    assert result.status_code == 503
+    assert "离线使用" in result.json["message"]

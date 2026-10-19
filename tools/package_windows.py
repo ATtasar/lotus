@@ -51,6 +51,12 @@ def package(program, version):
     collect_licenses(program)
     for name, command in {"停止工作台.cmd": "stop", "创建快捷方式.cmd": "shortcut", "打开数据目录.cmd": "open-data", "备份数据.cmd": "backup"}.items():
         (program / name).write_bytes((f'@echo off\r\nchcp 65001 >nul\r\n"%~dp0Lotus.exe" {command} %*\r\n').encode("utf-8"))
+    source_commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+    source_dirty = bool(subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=normal"], cwd=ROOT, text=True).strip())
+    if source_dirty:
+        raise ValueError("发布源码存在未提交修改，先保存提交再打包，避免安装包与 GitHub 标签不一致。")
+    provenance = {"version": version, "sourceCommit": source_commit, "repository": "https://github.com/ATtasar/lotus", "desktop": ui["files"], "workflowRun": os.environ.get("GITHUB_RUN_ID", "local")}
+    (program / "BUILD-INFO.json").write_text(json.dumps(provenance, ensure_ascii=False, indent=2), encoding="utf-8")
     archive = output / f"lotus-{version}-portable-win64.zip"
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as bundle:
         for file in sorted(program.rglob("*")):
@@ -64,7 +70,7 @@ def package(program, version):
         subprocess.run([compiler, "/Qp", f"/DMyAppVersion={version}", f"/DDistDir={program}", f"/DReleaseDir={output}", str(ROOT / "packaging/installer.iss")], cwd=ROOT, check=True)
     else:
         print("EXE 与便携 ZIP 已生成；未检测到 Inno Setup，未生成安装包。", flush=True)
-    manifest = {"version": version, "files": {file.name: {"sha256": hashlib.sha256(file.read_bytes()).hexdigest(), "bytes": file.stat().st_size} for file in output.iterdir() if file.is_file() and file.name != "release.json"}}
+    manifest = {"version": version, "sourceCommit": source_commit, "repository": provenance["repository"], "workflowRun": provenance["workflowRun"], "desktop": ui["files"], "files": {file.name: {"sha256": hashlib.sha256(file.read_bytes()).hexdigest(), "bytes": file.stat().st_size} for file in output.iterdir() if file.is_file() and file.name != "release.json"}}
     (output / "release.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     print(json.dumps(manifest, indent=2), flush=True)
     return manifest

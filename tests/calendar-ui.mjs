@@ -11,7 +11,8 @@ const output = path.resolve('artifacts/calendar-validation');
 await fs.mkdir(output, { recursive: true });
 const port = 17875, base = `http://127.0.0.1:${port}`;
 function launch(command, initial = false) {
-  const run = spawnSync(python, ['launcher.py', command, '--data-root', root, ...(initial ? ['--port', String(port), '--no-shortcut'] : []), '--no-browser', '--no-tray'], { cwd: path.resolve('.'), windowsHide: true, stdio: 'inherit', env: { ...process.env, PYTHONUTF8: '1' } });
+  const exe = process.env.LOTUS_EXE;
+  const run = spawnSync(exe || python, [...(exe ? [] : ['launcher.py']), command, '--data-root', root, ...(initial ? ['--port', String(port), '--no-shortcut'] : []), '--no-browser', '--no-tray'], { cwd: path.resolve('.'), windowsHide: true, stdio: 'inherit', env: { ...process.env, PYTHONUTF8: '1' } });
   assert.equal(run.status, 0);
 }
 function query(sql) { return JSON.parse(execFileSync(python, ['tests/sqlite_read.py', root, sql, '[]'], { encoding: 'utf8', env: { ...process.env, PYTHONUTF8: '1' } })); }
@@ -66,8 +67,8 @@ try {
   assert.equal(await page.locator('[role=dialog] .detail-link').count(), 4, 'day details must include all active intervals on that date');
   await page.locator('[data-action=close-modal]').click();
   await page.locator('.schedule-range-event[data-id=main]').first().click();
-  assert.match(await page.getByRole('dialog').innerText(), /头像稿件/);
-  await page.locator('[data-action=close-modal]').click();
+  assert.match(await page.locator('.linked-detail').innerText(), /头像稿件/);
+  await nav('calendar');
   await page.locator('[data-action=month-next]').click();
   const last = page.locator('.schedule-range-event[data-id=long]').last();
   assert.equal(await last.getAttribute('data-range-span'), '2');

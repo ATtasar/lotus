@@ -39,7 +39,7 @@ jobs:
           $env:PYTHONUTF8='1'
           python tools/build_windows.py
           exit $LASTEXITCODE
-      - name: Original desktop interaction test against frozen EXE
+      - name: Desktop interaction test against frozen EXE
         shell: pwsh
         run: |
           $env:PYTHONUTF8='1'
@@ -47,6 +47,14 @@ jobs:
           $version=(Get-Content VERSION -Raw).Trim()
           $env:LOTUS_EXE=(Resolve-Path "dist/$version/Lotus/Lotus.exe").Path
           node tests/ui.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node tests/preview-ui.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node tests/calendar-ui.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node tests/workbench-model.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node tests/calendar-range.mjs
           exit $LASTEXITCODE
       - name: Verify frozen EXE
         shell: pwsh
@@ -72,8 +80,14 @@ jobs:
           if ($env:GITHUB_REF_NAME -ne "v$version") { throw 'Tag and VERSION differ.' }
           gh release view $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY --title "Lotus $version" --notes 'Windows desktop only. Original UI preserved; local Flask and SQLite.'
+            gh release create $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY --verify-tag --draft --title "Lotus $version" --notes-file RELEASE-NOTES.md
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } else {
+            $draft=gh release view $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY --json isDraft --jq '.isDraft'
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            if ($draft -ne 'true') { throw 'Published release assets are immutable. Increment VERSION instead of overwriting an existing release.' }
           }
           gh release upload $env:GITHUB_REF_NAME "dist/$version/lotus-$version-portable-win64.zip" "dist/$version/lotus-$version-setup-win64.exe" "dist/$version/release.json" --repo $env:GITHUB_REPOSITORY --clobber
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          gh release edit $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY --draft=false --latest
           exit $LASTEXITCODE
