@@ -29,4 +29,4 @@
 - 原稿件模型、平台费用、可选字段、组件及自定义流程保持原有行为；不引入参考项目的陌生业务模块或改动 UI。
 - 保留 Lotus 旧备份读取和 CAS 版本冲突保护；恢复前确认并保留原数据。
 
-第三方 Python 依赖保留各自许可，版本固定在 requirements 文件。Python、Flask、Pydantic、Waitress、Pillow、pystray、PyInstaller 和 Inno Setup 的许可各自适用。编译器本身不随应用运行包分发。
+第三方 Python 依赖保留各自许可，版本固定在 requirements 文件。发布脚本会将 Python 和捆绑依赖的许可、vendored notices 收集到运行包的 licenses/。Python、Flask、Pydantic、Waitress、Pillow、pystray、PyInstaller 和 Inno Setup 的许可各自适用。编译器本身不随应用运行包分发。
