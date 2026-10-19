@@ -33,7 +33,11 @@ def main():
     assert shutil.which("node", path=runtime_env["PATH"]) is None
     assert shutil.which("python", path=runtime_env["PATH"]) is None
     def run(command, *options):
-        completed = subprocess.run([str(exe), command, "--data-root", str(root), *options], cwd=root, env=runtime_env, timeout=50, creationflags=subprocess.CREATE_NO_WINDOW)
+        # Frozen startup can be delayed by first-run antivirus scanning on a
+        # fresh GitHub-hosted Windows runner. The interaction suite already
+        # validates readiness separately, so allow the release smoke test the
+        # same generous startup window instead of reporting a false failure.
+        completed = subprocess.run([str(exe), command, "--data-root", str(root), *options], cwd=root, env=runtime_env, timeout=120, creationflags=subprocess.CREATE_NO_WINDOW)
         if completed.returncode:
             raise ValueError("打包程序执行失败，请查看：" + str(root / "logs/lotus.log"))
     def request(endpoint, body=None):
