@@ -27,6 +27,19 @@ PROGRAM = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False)
 
 
 def default_root():
+    # Installed copies retain their chosen database directory independently of
+    # Explorer's inherited environment. Never silently fall back to an empty
+    # default workspace when a previously selected drive is unavailable.
+    location = PROGRAM / 'data-location.json'
+    if location.exists():
+        saved = read_json(location)
+        value = saved.get('dataRoot') if isinstance(saved, dict) else None
+        if not isinstance(value, str) or saved.get('appId') != APP_ID or not Path(value).is_absolute():
+            raise ValueError('已保存的数据位置配置无效，请保留原数据并检查 data-location.json。')
+        root = Path(value).resolve()
+        if not (root / 'data/workbench.sqlite').is_file():
+            raise ValueError('已保存的数据库位置无法访问，未新建空库：' + str(root))
+        return root
     override = os.environ.get("LOTUS_LOCAL_ROOT")
     if override:
         root = Path(override)
@@ -96,12 +109,18 @@ def health(port):
 
 def state(root):
     file = root / "runtime/service.json"
-    try:
-        return read_json(file)
-    except FileNotFoundError:
-        # Normal during shutdown: the service can remove its state between
-        # the launcher's existence check and read. Treat that as stopped.
-        return None
+    for attempt in range(5):
+        try:
+            return read_json(file)
+        except FileNotFoundError:
+            return None
+        except PermissionError:
+            # Windows can briefly reject opening a delete-pending file while
+            # a service exits. Retry that transient case; real access failures
+            # still surface instead of being mistaken for a stopped service.
+            if attempt == 4:
+                raise
+            time.sleep(0.02)
 
 
 def settings(root, port=None):

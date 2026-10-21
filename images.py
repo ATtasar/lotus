@@ -43,6 +43,13 @@ def file_id(mime: str, content: bytes) -> str:
 
 
 def image_slots(data: dict):
+    for image in data.get('portfolioImages', []):
+        yield image, 'src'
+    for widget in data.get('healthWidgets', []):
+        if widget.get('icon'):
+            yield widget, 'icon'
+    if data.get('portfolioCover', {}).get('image'):
+        yield data['portfolioCover'], 'image'
     for entry in data.get("priceEntries", []):
         if entry.get("image"):
             yield entry, "image"

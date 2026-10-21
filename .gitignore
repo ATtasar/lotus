@@ -15,6 +15,7 @@ node_modules/
 *.log
 /config.json
 /config.last-good.json
+/data-location.json
 /data/
 /runtime/
 /logs/

@@ -9,7 +9,7 @@ if (!python) throw Error('Set LOTUS_PYTHON.');
 const root = await fs.mkdtemp(path.resolve('artifacts/calendar-ui-'));
 const output = path.resolve('artifacts/calendar-validation');
 await fs.mkdir(output, { recursive: true });
-const port = 17875, base = `http://127.0.0.1:${port}`;
+const port = Number(process.env.LOTUS_CALENDAR_TEST_PORT || 17879), base = `http://127.0.0.1:${port}`;
 function launch(command, initial = false) {
   const exe = process.env.LOTUS_EXE;
   const run = spawnSync(exe || python, [...(exe ? [] : ['launcher.py']), command, '--data-root', root, ...(initial ? ['--port', String(port), '--no-shortcut'] : []), '--no-browser', '--no-tray'], { cwd: path.resolve('.'), windowsHide: true, stdio: 'inherit', env: { ...process.env, PYTHONUTF8: '1' } });

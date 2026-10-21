@@ -1,6 +1,7 @@
 // Shared desktop data model; additive fields retain old backup compatibility.
 import { validateDesign } from './design-model.js';
 import { EXTRA_COLLECTIONS, validateExtras } from './workbench-model.js';
+import { WORKSPACE_COLLECTIONS, validateWorkspaceFeatures, mergeWorkspaceFeatures } from './workspace-model.js';
 const dateStr = (date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 const parseDate = (s) => new Date(s + 'T12:00:00');
@@ -19,6 +20,7 @@ export function initialData() {
     assets: [],
     toolTemplates: [],
     ...Object.fromEntries(EXTRA_COLLECTIONS.map((key) => [key, []])),
+    ...Object.fromEntries(WORKSPACE_COLLECTIONS.map((key) => [key, []])),
     current: '',
     profile: { name: '接稿工作台', artist: '管理员', tagline: '' },
   };
@@ -93,6 +95,7 @@ export function validateBackup(raw) {
     }
   }
   validateExtras(raw, safeImage, fail);
+  validateWorkspaceFeatures(raw, safeImage, fail);
   const platforms = new Set(raw.platforms.map((p) => p.id)),
     clients = new Set([...raw.clients, ...raw.archivedClients].map((c) => c.id));
   for (const p of raw.platforms)
@@ -125,7 +128,7 @@ export function validateBackup(raw) {
         !o.title.trim() ||
         !str(o.category) ||
         !str(o.requirements) ||
-        !platforms.has(o.platform) ||
+        (!platforms.has(o.platform) && !(type === 'orders' && o.rushHours && !o.platform)) ||
         !num(o.deposit) ||
         !num(o.balance) ||
         !num(o.fee, 100)
@@ -151,7 +154,7 @@ export function validateBackup(raw) {
         fail('服务金额不正确');
       if (
         type === 'orders' &&
-        (!clients.has(o.client) ||
+        ((!clients.has(o.client) && !(o.rushHours && !o.client)) ||
           !validDate(o.start) ||
           !validDate(o.due) ||
           o.start > o.due ||
@@ -160,6 +163,7 @@ export function validateBackup(raw) {
           !str(o.notes))
       )
         fail('稿件日期、单主或状态不正确');
+      if (o.rushHours !== undefined && o.rushHours !== null && (!['orders'].includes(type) || ![24,48].includes(o.rushHours) || !Number.isFinite(Date.parse(o.startAt)) || !Number.isFinite(Date.parse(o.dueAt)) || o.startAt.slice(0,10)!==o.start || o.dueAt.slice(0,10)!==o.due || Date.parse(o.dueAt)<Date.parse(o.startAt))) fail('限时稿件的具体时间不正确');
     }
   for (const a of raw.assets) if (!str(a.name) || !safeImage(a.src)) fail('素材不正确');
   for (const t of raw.toolTemplates) {
@@ -211,6 +215,7 @@ export function mergeBackup(current, incoming) {
       'assets',
       'toolTemplates',
       ...EXTRA_COLLECTIONS,
+      ...WORKSPACE_COLLECTIONS,
     ].flatMap((key) => merged[key].map((item) => item.id)),
   );
   const newId = () => {
@@ -251,8 +256,8 @@ export function mergeBackup(current, incoming) {
     merged.orders.push({
       ...item,
       id,
-      platform: platforms.get(item.platform),
-      client: clients.get(item.client),
+      platform: platforms.get(item.platform) || '',
+      client: clients.get(item.client) || '',
     });
   }
   for (const item of source.templates) {
@@ -275,5 +280,6 @@ export function mergeBackup(current, incoming) {
   if (!merged.current) merged.current = orders.get(source.current) || '';
   if (!merged.watermarkMark && source.watermarkMark) merged.watermarkMark = source.watermarkMark;
   merged.categories = [...new Set([...categoryChoices(merged), ...categoryChoices(source)])];
+  mergeWorkspaceFeatures(merged, source, newId);
   return validateBackup(merged);
 }

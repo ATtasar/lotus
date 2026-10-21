@@ -23,7 +23,7 @@ from images import DISK_REFERENCE, decode_image, file_id, image_slots
 from models import COLLECTIONS, initial_data, validate_workspace
 
 APP_ID = "lotus-workbench-windows-v1"
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 class Conflict(ValueError):
@@ -110,6 +110,8 @@ class Store:
             self._migrate_v2()
         if version < 4 and migrate:
             self._migrate_v4()
+        if version < 5 and migrate:
+            self._migrate_v5()
         self.schema_version = SCHEMA_VERSION if migrate else version
 
     @contextmanager
@@ -149,7 +151,8 @@ class Store:
             connection.execute("INSERT INTO desktop_workspace VALUES(1,0,?)", (json_bytes(metadata).decode(),))
             self._add_schema_v3(connection)
             connection.execute("INSERT INTO schema_migrations VALUES(4,?,?)", (utc_stamp(), "价目表、文字分组与稿件模板多对多关联；阻止旧版忽略新增记录"))
-            connection.execute("PRAGMA user_version=4")
+            connection.execute("INSERT INTO schema_migrations VALUES(5,?,?)", (utc_stamp(), "作品、生活记录与特殊限时稿件；保留历史稿件数据"))
+            connection.execute("PRAGMA user_version=5")
             connection.execute("COMMIT")
         except BaseException:
             connection.execute("ROLLBACK")
@@ -192,6 +195,20 @@ class Store:
                 connection.execute("PRAGMA user_version=4")
         except Exception as error:
             raise ValueError(f"组件数据迁移失败，已回滚；升级前备份：{backup}。{error}") from error
+
+    def _migrate_v5(self):
+        backup = self.backup('before-workspace-v5')
+        try:
+            data = self.load()['data']
+            with self.transaction() as connection:
+                connection.execute('DELETE FROM desktop_edges')
+                self._edges(connection, data)
+                connection.execute('INSERT INTO schema_migrations VALUES(5,?,?)', (utc_stamp(), '作品、生活记录与特殊限时稿件；保留原记录与附件'))
+                if connection.execute('PRAGMA foreign_key_check').fetchone():
+                    raise ValueError('工作空间关联校验失败。')
+                connection.execute('PRAGMA user_version=5')
+        except Exception as error:
+            raise ValueError(f'工作空间迁移失败，已回滚；升级前备份：{backup}。{error}') from error
 
     def _load(self, connection):
         # The read transaction gives metadata, records and file references one revision.
@@ -238,8 +255,9 @@ class Store:
                 rows.extend((key, client["id"], f"platforms.{index}", "platforms", platform) for index, platform in enumerate(client["platforms"]))
         for key in ("orders", "templates"):
             for order in data[key]:
-                rows.append((key, order["id"], "platform", "platforms", order["platform"]))
-                if key == "orders":
+                if order['platform']:
+                    rows.append((key, order["id"], "platform", "platforms", order["platform"]))
+                if key == "orders" and order['client']:
                     rows.append((key, order["id"], "client", "clients" if order["client"] in active else "archivedClients", order["client"]))
         for folder in data["replyFolders"]:
             if folder.get("parent"):
@@ -248,6 +266,10 @@ class Store:
             if reply.get("parent"):
                 rows.append(("replyTemplates", reply["id"], "parent", "replyFolders", reply["parent"]))
             rows.extend(("replyTemplates", reply["id"], f"templateIds.{index}", "templates", value) for index, value in enumerate(reply["templateIds"]))
+        for collection, field, target in [('portfolioFolders', 'parent', 'portfolioFolders'), ('portfolioImages', 'folder', 'portfolioFolders'), ('lifeEvents', 'category', 'lifeCategories'), ('healthLogs', 'widget', 'healthWidgets')]:
+            for item in data.get(collection, []):
+                if item.get(field):
+                    rows.append((collection, item['id'], field, target, item[field]))
         connection.executemany("INSERT INTO desktop_edges VALUES(?,?,?,?,?)", rows)
 
     def save(self, value, base_revision):
@@ -358,7 +380,7 @@ def restore_backup(root, source):
     """Caller must hold the service mutex and obtain explicit user confirmation."""
     root, source = Path(root).resolve(), Path(source).resolve()
     manifest = read_json(source / "backup.json")
-    if manifest.get("appId") != APP_ID or manifest.get("format") != 1 or manifest.get("schemaVersion") not in (2, 3, SCHEMA_VERSION) or "workbench.sqlite" not in manifest.get("files", {}):
+    if manifest.get("appId") != APP_ID or manifest.get("format") != 1 or manifest.get("schemaVersion") not in (2, 3, 4, SCHEMA_VERSION) or "workbench.sqlite" not in manifest.get("files", {}):
         raise ValueError("备份格式或版本不兼容。")
     stage = root / ("restore-" + str(uuid4()))
     for name, checksum in manifest["files"].items():

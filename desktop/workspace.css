@@ -1,0 +1,887 @@
+.rush-templates {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 0 0 24px;
+}
+.rush-template {
+    display: flex;
+    min-height: 150px;
+    border: 1px solid #e4e4e4;
+    border-radius: 12px;
+    background: #fff;
+    overflow: hidden;
+}
+.rush-template-color {
+    background: var(--rush);
+    --foreground: var(--rush-ink, #fff);
+    width: 42%;
+    min-width: 120px;
+    color: var(--foreground);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 24px;
+    gap: 8px;
+}
+.rush-template-color strong {
+    font-size: 40px;
+    font-weight: 500;
+    letter-spacing: -2px;
+}
+.rush-template-color span {
+    font-size: 11px;
+}
+.rush-template > div + div {
+    padding: 20px;
+    flex: 1;
+}
+.rush-template p {
+    font-size: 13px;
+    margin: 0 0 8px;
+}
+.rush-template small {
+    font-size: 11px;
+    color: #888;
+}
+.rush-template .row {
+    margin-top: 18px;
+    flex-wrap: wrap;
+}
+.rush-order-hint {
+    padding: 16px;
+    border: 1px solid #ddd;
+    border-left: 6px solid var(--rush);
+    border-radius: 7px;
+    margin-bottom: 16px;
+    font-size: 12px;
+    line-height: 1.9;
+}
+.rush-select {
+    border: 1px solid #ddd;
+    padding: 10px;
+    border-radius: 6px;
+}
+.order-rush-time {
+    font-variant-numeric: tabular-nums;
+    font-size: 11px;
+    white-space: nowrap;
+}
+.range-drag-handle {
+    cursor: grab;
+    flex-shrink: 0;
+    border-radius: 3px;
+    font-size: 9px;
+    padding: 2px 4px;
+    background: #ffffff24;
+    position: relative;
+    z-index: 2;
+}
+.range-end-handle {
+    margin-left: auto;
+}
+.schedule-range-event[draggable='true'],
+.event[draggable='true'] {
+    cursor: grab;
+}
+.schedule-range-event:active,
+.range-drag-handle:active {
+    cursor: grabbing;
+}
+.calendar-life-lane {
+    pointer-events: auto;
+    position: relative;
+    padding: 5px 6px 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+.calendar-life-lane .life-calendar-event {
+    flex: 0 1 160px;
+}
+.life-calendar-event {
+    display: flex;
+    justify-content: space-between;
+    gap: 5px;
+    border: 0;
+    border-left: 3px solid var(--event-color);
+    background: #f0f0f0;
+    color: #444;
+    border-radius: 3px;
+    text-align: left;
+    padding: 5px 6px;
+    margin: 3px 0;
+    width: 100%;
+    font-size: 10px;
+    min-width: 0;
+    cursor: pointer;
+}
+.life-calendar-event strong {
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.life-calendar-event small {
+    font-size: 9px;
+}
+.life-calendar-event.done {
+    opacity: 0.48;
+    text-decoration: line-through;
+    background: #e5e5e5;
+}
+.portfolio-path {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 20px;
+    font-size: 12px;
+}
+.portfolio-book-panel {
+    padding: 24px 0 12px;
+    overflow: hidden;
+    min-width: 0;
+}
+.accordion-book {
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    min-height: 420px;
+    max-height: 580px;
+    height: 48vh;
+    perspective: 1400px;
+    padding: 20px 22px 32px;
+    overflow: hidden;
+}
+.album-leaf {
+    position: relative;
+    flex: 0 1 38px;
+    min-width: 12px;
+    max-width: 60px;
+    background: #fff;
+    border: 1px solid #dedede;
+    border-radius: 1px;
+    box-shadow: 2px 6px 14px #00000008;
+    overflow: hidden;
+    padding: 0;
+    cursor: pointer;
+    transition:
+        flex 0.45s ease,
+        transform 0.45s ease,
+        max-width 0.45s ease;
+    margin-left: -1px;
+    transform-origin: left center;
+}
+.album-leaf.fold-before {
+    transform: rotateY(-32deg);
+}
+.album-leaf.fold-after {
+    transform: rotateY(32deg);
+}
+.album-leaf.current {
+    flex: 1 1 600px;
+    max-width: 720px;
+    min-width: 260px;
+    transform: none;
+    z-index: 2;
+}
+.album-leaf img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #fff;
+}
+.album-leaf:not(.current) img {
+    object-fit: cover;
+}
+.album-cover {
+    background: var(--cover, #242424);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.album-cover span {
+    position: absolute;
+    left: 24px;
+    right: 24px;
+    font-size: 24px;
+    line-height: 1.6;
+    writing-mode: vertical-rl;
+}
+.album-cover.current span {
+    writing-mode: horizontal-tb;
+}
+.album-cover img {
+    object-fit: cover;
+    background: transparent;
+}
+.album-drop-label {
+    font-size: 11px;
+    color: #aaa;
+    white-space: nowrap;
+}
+.album-leaf:not(.current) .album-drop-label {
+    display: none;
+}
+.album-page-number {
+    position: absolute;
+    bottom: 12px;
+    left: 0;
+    right: 0;
+    font-size: 9px;
+    color: #aaa;
+}
+.album-cover .album-page-number {
+    color: #ddd;
+}
+.album-controls {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    align-items: center;
+    font-size: 12px;
+    margin: 8px 0 26px;
+}
+.album-controls small {
+    color: #999;
+    font-size: 10px;
+}
+.portfolio-library {
+    padding-bottom: 20px;
+}
+.portfolio-folder-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 0 22px 16px;
+}
+.portfolio-folder {
+    border: 1px solid #ddd;
+    background: #fafafa;
+    border-radius: 6px;
+    padding: 8px;
+    display: flex;
+    gap: 5px;
+}
+.portfolio-folder .btn {
+    font-size: 10px;
+}
+.portfolio-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(165px, 1fr));
+    gap: 14px;
+    padding: 0 22px;
+    min-height: 130px;
+}
+.portfolio-image {
+    position: relative;
+    min-width: 0;
+    border: 1px solid #eee;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #fafafa;
+}
+.portfolio-image > input {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 2;
+    width: 16px;
+    height: 16px;
+    accent-color: #333;
+}
+.portfolio-image > button {
+    padding: 0;
+    border: 0;
+    width: 100%;
+    background: none;
+    cursor: pointer;
+    text-align: left;
+}
+.portfolio-image img {
+    width: 100%;
+    height: 155px;
+    object-fit: contain;
+    background: #f5f5f5;
+}
+.portfolio-image span {
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 11px;
+    padding: 10px;
+}
+.portfolio-empty {
+    grid-column: 1/-1;
+    border: 1px dashed #ddd;
+    border-radius: 8px;
+}
+.portfolio-move {
+    margin: 0 22px 16px;
+    max-width: 400px;
+}
+.cover-image-preview {
+    width: 100%;
+    max-height: 180px;
+    object-fit: contain;
+    margin: 10px 0;
+}
+.life-tabs {
+    display: flex;
+    gap: 6px;
+    border-bottom: 1px solid #ddd;
+    margin: 0 0 24px;
+}
+.life-tabs button {
+    padding: 14px 22px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: none;
+    color: #888;
+    font-size: 12px;
+    cursor: pointer;
+}
+.life-tabs button.active {
+    border-bottom-color: #222;
+    color: #222;
+}
+.life-agenda {
+    overflow: hidden;
+}
+.life-calendar {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    border-top: 1px solid #e9e9e9;
+}
+.life-weekday {
+    text-align: center;
+    font-size: 10px;
+    color: #999;
+    padding: 12px;
+}
+.life-day {
+    min-height: 100px;
+    border-right: 1px solid #eee;
+    border-top: 1px solid #eee;
+    padding: 7px;
+    min-width: 0;
+}
+.life-day:nth-child(7n) {
+    border-right: 0;
+}
+.life-day.outside {
+    background: #fbfbfb;
+    color: #ccc;
+}
+.life-day.today .life-day-number {
+    background: #222;
+    color: white;
+    border-radius: 4px;
+}
+.life-day-number {
+    border: 0;
+    background: none;
+    cursor: pointer;
+    width: 24px;
+    height: 24px;
+    font-size: 11px;
+}
+.event-quick-strip {
+    border-top: 1px solid #ddd;
+    padding: 20px 24px;
+    background: #fafafa;
+}
+.event-quick-strip form,
+#todo-quick-form {
+    display: flex;
+    gap: 10px;
+}
+.event-quick-strip form input,
+#todo-quick-form input {
+    flex: 1;
+    min-width: 0;
+}
+.untimed-events {
+    margin-top: 12px;
+}
+.life-event-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 15px 0;
+    border-bottom: 1px solid #e8e8e8;
+}
+.event-row-main {
+    border: 0;
+    background: none;
+    flex: 1;
+    text-align: left;
+    cursor: pointer;
+    min-width: 0;
+}
+.event-row-main strong,
+.event-row-main small {
+    display: block;
+}
+.event-row-main strong {
+    font-size: 12px;
+    font-weight: 500;
+}
+.event-row-main small {
+    font-size: 10px;
+    color: #999;
+    margin-top: 6px;
+}
+.event-row-main p {
+    font-size: 11px;
+    color: #777;
+    white-space: pre-wrap;
+    max-height: 70px;
+    overflow: hidden;
+}
+.life-event-row.done .event-row-main {
+    opacity: 0.5;
+    text-decoration: line-through;
+}
+.life-event-list {
+    padding: 0 24px 24px;
+}
+.life-category-editor {
+    padding: 10px 0 18px;
+    font-size: 11px;
+}
+.life-category-editor summary {
+    cursor: pointer;
+    color: #777;
+    margin-bottom: 10px;
+}
+.life-category-editor input[type='color'] {
+    width: 50px;
+}
+.health-chart-panel {
+    margin-top: 22px;
+    margin-bottom: 22px;
+}
+.health-chart-panel .panel-header small {
+    color: #999;
+    font-size: 10px;
+}
+.health-chart {
+    padding: 0 24px 24px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 25px;
+}
+.health-chart-series > div:first-child {
+    display: flex;
+    gap: 12px;
+    font-size: 12px;
+    align-items: center;
+}
+.health-chart-series > div:first-child small {
+    color: #aaa;
+}
+.health-bars {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    height: 120px;
+    align-items: end;
+    gap: 8px;
+    margin-top: 12px;
+}
+.health-bar-column {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: end;
+    font-size: 9px;
+    color: #aaa;
+    height: 100%;
+}
+.health-bar-column i {
+    display: block;
+    background: #555;
+    min-width: 8px;
+    width: 55%;
+    border-radius: 3px 3px 0 0;
+    min-height: 1px;
+    margin-top: 5px;
+}
+.health-bar-column small {
+    font-size: 9px;
+    border-top: 1px solid #ddd;
+    width: 100%;
+    text-align: center;
+    padding-top: 7px;
+}
+.health-widget-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 18px;
+    padding: 0 24px 24px;
+}
+.health-widget {
+    border: 1px solid #e6e6e6;
+    border-radius: 9px;
+    padding: 20px;
+    min-height: 220px;
+}
+.health-widget-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+}
+.health-icon {
+    border: 0;
+    background: #f3f3f3;
+    width: 58px;
+    height: 58px;
+    border-radius: 12px;
+    padding: 12px;
+    cursor: pointer;
+}
+.health-icon svg {
+    width: 100%;
+    height: 100%;
+}
+.health-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+.health-widget h3 {
+    font-size: 13px;
+    margin-top: 18px;
+}
+.health-count {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+}
+.health-count strong {
+    font-size: 34px;
+    font-weight: 400;
+}
+.health-count span {
+    font-size: 10px;
+    color: #999;
+}
+.health-controls {
+    margin-top: 12px;
+}
+.health-controls:not([hidden]) {
+    display: flex;
+    gap: 10px;
+}
+.health-controls .btn {
+    min-width: 48px;
+}
+.health-icon-preview {
+    width: 68px;
+    height: 68px;
+    margin: 15px 0;
+}
+.health-icon-preview svg,
+.health-icon-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+.food-wheels {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 22px;
+}
+.food-wheel-panel {
+    text-align: center;
+    overflow: hidden;
+    padding-bottom: 24px;
+}
+.food-wheel {
+    position: relative;
+    width: 280px;
+    height: 280px;
+    margin: 15px auto 25px;
+    cursor: pointer;
+}
+.food-wheel-disc {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    border-radius: 50%;
+    border: 10px solid #f4f4f4;
+    outline: 1px solid #e2e2e2;
+    background: repeating-conic-gradient(
+        #e7e7e7 0deg calc(180deg / var(--sectors)),
+        #f8f8f8 calc(180deg / var(--sectors)) calc(360deg / var(--sectors))
+    );
+    overflow: hidden;
+}
+.food-wheel-disc > span:not(.wheel-empty) {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: rotate(var(--angle)) translateY(-98px) translateX(-50%);
+    transform-origin: 0 0;
+    font-size: 11px;
+    max-width: 75px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.food-wheel-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 76px;
+    height: 76px;
+    border-radius: 50%;
+    background: #252525;
+    color: white;
+    border: 7px solid white;
+    box-shadow: 0 0 0 1px #ddd;
+    font-size: 13px;
+    cursor: pointer;
+}
+.wheel-empty {
+    position: absolute;
+    top: 24px;
+    left: 0;
+    right: 0;
+    color: #aaa;
+    font-size: 11px;
+}
+.food-slot {
+    border: 1px solid #ddd;
+    background: #f9f9f9;
+    height: 74px;
+    overflow: hidden;
+    margin: 0 28px 20px;
+    border-radius: 9px;
+    box-shadow: inset 0 9px 13px #00000008;
+    position: relative;
+}
+.food-slot-reel > span,
+.food-slot-reel > button,
+.slot-option {
+    height: 72px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    letter-spacing: 1px;
+    width: 100%;
+    background: none;
+    border: 0;
+    color: #333;
+}
+.food-slot-reel > span {
+    font-size: 12px;
+    color: #999;
+}
+.food-slot-reel > button {
+    cursor: pointer;
+}
+.food-entry-list {
+    padding: 15px 24px 0;
+}
+.food-entry-list article {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: center;
+    border-top: 1px solid #eee;
+    padding: 12px 0;
+}
+.food-entry-list article > button:first-child {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: start;
+    flex: 1;
+    border: 0;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+}
+.food-entry-list strong {
+    font-size: 12px;
+    font-weight: 500;
+}
+.food-entry-list small {
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: #777;
+}
+.todo-panel {
+    padding-bottom: 25px;
+}
+.todo-panel form {
+    padding: 0 24px 20px;
+}
+.todo-list {
+    padding: 0 24px;
+}
+.todo-row {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    border-top: 1px solid #e6e6e6;
+    min-height: 67px;
+    padding: 12px 0;
+}
+.todo-row > span {
+    flex: 1;
+    font-size: 13px;
+}
+.todo-circle {
+    border: 1px solid #bbb;
+    width: 21px;
+    height: 21px;
+    border-radius: 50%;
+    flex: 0 0 21px;
+    background: white;
+    color: white;
+    cursor: pointer;
+    font-size: 11px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+}
+.todo-circle.checked {
+    background: #333;
+    border-color: #333;
+}
+.todo-row.done > span {
+    color: #aaa;
+    text-decoration: line-through;
+}
+.schedule-date-popover {
+    position: fixed;
+    z-index: 1500;
+    width: 370px;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    box-shadow: 0 12px 45px #0002;
+    padding: 16px;
+}
+.schedule-date-popover p {
+    font-size: 10px;
+    color: #888;
+    margin: 10px 0;
+}
+.date-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 3px;
+}
+.date-picker-grid > span {
+    text-align: center;
+    font-size: 9px;
+    color: #999;
+    padding: 5px 0;
+}
+.picker-day {
+    min-height: 42px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    border: 1px solid transparent;
+    background: #fafafa;
+    border-radius: 3px;
+    font-size: 11px;
+    padding: 4px;
+    cursor: pointer;
+    gap: 4px;
+}
+.picker-day.outside {
+    color: #ccc;
+    background: #fdfdfd;
+}
+.picker-day.selected {
+    border-color: #222;
+}
+.picker-day:hover {
+    background: #eee;
+}
+.picker-marks {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-height: 8px;
+}
+.picker-marks i {
+    display: block;
+    height: 3px;
+    min-width: 4px;
+    border-radius: 1px;
+    align-self: center;
+    width: 5px;
+}
+.picker-marks i.range-mark {
+    width: 100%;
+}
+#workspace-form .field {
+    margin-bottom: 16px;
+}
+#workspace-form textarea {
+    min-height: 80px;
+}
+#workspace-form .btn {
+    margin-right: 5px;
+}
+@media (max-width: 1150px) {
+    .food-wheels {
+        gap: 12px;
+    }
+    .food-wheel {
+        width: 230px;
+        height: 230px;
+    }
+    .food-wheel-disc > span:not(.wheel-empty) {
+        transform: rotate(var(--angle)) translateY(-75px) translateX(-50%);
+    }
+    .rush-template-color {
+        min-width: 100px;
+        padding: 20px;
+    }
+    .life-agenda .panel-header {
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    .life-agenda .panel-header > .row {
+        flex-wrap: wrap;
+    }
+    .accordion-book {
+        height: 420px;
+        min-height: 360px;
+    }
+}
+.calendar-life-grid {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 3px;
+    padding-top: 3px;
+    pointer-events: none;
+}
+.calendar-life-grid > div {
+    min-width: 0;
+    padding: 0 3px;
+}
+.calendar-life-grid .life-calendar-event {
+    pointer-events: auto;
+}
+.compact-order-date {
+    width: 118px;
+}
+.compact-order-date > strong {
+    font-size: 11px;
+}
+.health-controls[hidden] {
+    display: none;
+}

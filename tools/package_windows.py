@@ -61,7 +61,7 @@ def package(program, version):
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as bundle:
         for file in sorted(program.rglob("*")):
             if file.is_file():
-                if file.suffix in (".sqlite", ".db", ".log") or file.name in ("config.json", "config.last-good.json", "service.json"):
+                if file.suffix in (".sqlite", ".db", ".log") or file.name in ("config.json", "config.last-good.json", "data-location.json", "service.json"):
                     raise ValueError("打包目录含用户数据，停止：" + str(file))
                 bundle.write(file, Path("Lotus") / file.relative_to(program))
     candidates = [os.environ.get("ISCC"), shutil.which("ISCC.exe"), str(Path(os.environ.get("LOCALAPPDATA", "")) / "Programs/Inno Setup 6/ISCC.exe"), str(Path(os.environ.get("PROGRAMFILES(X86)", "C:/Program Files (x86)")) / "Inno Setup 6/ISCC.exe")]

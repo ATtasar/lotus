@@ -4,7 +4,7 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from db import Store, restore_backup
+from db import Store, restore_backup, SCHEMA_VERSION
 from models import validate_workspace, EXTRA_COLLECTIONS
 from test_storage import fixture, PNG
 
@@ -73,14 +73,14 @@ def test_schema3_upgrade_is_backed_up_and_keeps_record_bytes(tmp_path):
     store = Store(tmp_path, initialize=True)
     store.save(extras_fixture(), 0)
     with store.connection() as db:
-        db.execute('DELETE FROM schema_migrations WHERE version=4')
+        db.execute('DELETE FROM schema_migrations WHERE version>=4')
         db.execute('PRAGMA user_version=3')
         records = [tuple(row) for row in db.execute('SELECT * FROM desktop_records ORDER BY rowid')]
     upgraded = Store(tmp_path)
-    assert upgraded.schema_version == 4
+    assert upgraded.schema_version == SCHEMA_VERSION
     assert upgraded.load() == {'revision': 1, 'data': extras_fixture()}
     with upgraded.connection(readonly=True) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 4
+        assert db.execute('PRAGMA user_version').fetchone()[0] == SCHEMA_VERSION
         assert [tuple(row) for row in db.execute('SELECT * FROM desktop_records ORDER BY rowid')] == records
     backup = next(path for path in (tmp_path / 'backups').iterdir() if 'before-desktop-tools-v4' in path.name)
     assert json.loads((backup / 'backup.json').read_text(encoding='utf-8'))['schemaVersion'] == 3
@@ -93,7 +93,7 @@ def test_schema4_failure_rolls_back_without_touching_records(tmp_path, monkeypat
     data = extras_fixture()
     store.save(data, 0)
     with store.connection() as db:
-        db.execute('DELETE FROM schema_migrations WHERE version=4')
+        db.execute('DELETE FROM schema_migrations WHERE version>=4')
         db.execute('PRAGMA user_version=3')
     def fail(*_):
         raise ValueError('simulated relation write failure')

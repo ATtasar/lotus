@@ -51,7 +51,7 @@ export function updateOrderDates(order, previous, stamp = new Date().toISOString
     delete order.completedAt;
   }
 }
-export const sortActive = (orders) => [...orders].sort((a, b) => a.due.localeCompare(b.due) || (a.createdAt || a.created || '').localeCompare(b.createdAt || b.created || '') || a.id.localeCompare(b.id));
+export const sortActive = (orders) => [...orders].sort((a, b) => (a.dueAt || a.due).localeCompare(b.dueAt || b.due) || (a.createdAt || a.created || '').localeCompare(b.createdAt || b.created || '') || a.id.localeCompare(b.id));
 export const sortEnded = (orders) => [...orders].sort((a, b) => (b.endedAt || b.completedAt || b.due).localeCompare(a.endedAt || a.completedAt || a.due) || b.id.localeCompare(a.id));
 export function paginate(items, page, size) {
   const pages = Math.max(1, Math.ceil(items.length / size));

@@ -8,9 +8,10 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from images import decode_image
+from workspace_models import WORKSPACE_COLLECTIONS, validate_workspace_features
 
 EXTRA_COLLECTIONS = ("priceEntries", "priceLists", "replyFolders", "replyTemplates")
-COLLECTIONS = ("platforms", "clients", "archivedClients", "orders", "templates", "assets", "toolTemplates", *EXTRA_COLLECTIONS)
+COLLECTIONS = ("platforms", "clients", "archivedClients", "orders", "templates", "assets", "toolTemplates", *EXTRA_COLLECTIONS, *WORKSPACE_COLLECTIONS)
 Identifier = Annotated[str, Field(pattern=r"^[a-zA-Z0-9_-]{1,80}$")]
 Text = Annotated[str, Field(max_length=30000)]
 Color = Annotated[str, Field(pattern=r"^#[0-9a-fA-F]{6}$")]
@@ -63,7 +64,7 @@ class Extra(BaseModel):
 class Commission(Record):
     title: Text
     category: Text
-    platform: Identifier
+    platform: Identifier | Literal[""]
     deposit: Money
     balance: Money
     fee: Annotated[float | int, Field(ge=0, le=100)]
@@ -88,7 +89,10 @@ class Commission(Record):
 
 
 class Order(Commission):
-    client: Identifier
+    client: Identifier | Literal[""]
+    rushHours: Literal[24, 48] | None = None
+    startAt: str = ""
+    dueAt: str = ""
     start: str
     due: str
     status: str
@@ -102,6 +106,13 @@ class Order(Commission):
                 raise ValueError("稿件日期不正确。")
         if self.start > self.due or self.status not in self.stages + ["退单"]:
             raise ValueError("稿件日期或状态不正确。")
+        if not self.rushHours and (not self.platform or not self.client):
+            raise ValueError("普通稿件需要选择平台和单主。")
+        if self.rushHours:
+            from datetime import datetime
+            begin, end = datetime.fromisoformat(self.startAt), datetime.fromisoformat(self.dueAt)
+            if begin.date().isoformat() != self.start or end.date().isoformat() != self.due or end < begin:
+                raise ValueError("特殊稿件的日期和具体时间不一致。")
         return self
 
 
@@ -197,6 +208,8 @@ class Workspace(BaseModel):
     @model_validator(mode="after")
     def relationships(self):
         for key in COLLECTIONS:
+            if key in WORKSPACE_COLLECTIONS:
+                continue  # Validated below against the raw, additive workspace records.
             records = getattr(self, key)
             if len({item.id for item in records}) != len(records):
                 raise ValueError("记录编号重复：" + key)
@@ -206,10 +219,10 @@ class Workspace(BaseModel):
             if any(platform not in platform_ids for platform in client.platforms):
                 raise ValueError("单主关联的平台不存在。")
         for item in self.orders + self.templates:
-            if item.platform not in platform_ids:
+            if item.platform not in platform_ids and not (isinstance(item, Order) and item.rushHours and not item.platform):
                 raise ValueError("稿件关联的平台不存在。")
         for item in self.orders:
-            if item.client not in client_ids:
+            if item.client not in client_ids and not (item.rushHours and not item.client):
                 raise ValueError("稿件关联的单主不存在。")
         folders = {item.id: item for item in self.replyFolders}
         for folder in self.replyFolders:
@@ -270,6 +283,7 @@ def validate_workspace(value):
     data.setdefault("scheduleView", "deadline")
     for key in EXTRA_COLLECTIONS:
         data.setdefault(key, [])
+    validate_workspace_features(data)
     for container, key in image_slots(data):
         decode_image(container[key])
     for template in data["toolTemplates"]:

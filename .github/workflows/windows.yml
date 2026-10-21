@@ -52,9 +52,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node tests/calendar-ui.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node tests/workspace-ui.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node tests/workbench-model.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node tests/calendar-range.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node tests/workspace-model.mjs
           exit $LASTEXITCODE
       - name: Verify frozen EXE
         shell: pwsh

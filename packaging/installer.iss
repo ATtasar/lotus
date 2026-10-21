@@ -1,11 +1,11 @@
 #ifndef MyAppVersion
-  #define MyAppVersion "1.3.1"
+  #define MyAppVersion "1.4.0"
 #endif
 #ifndef DistDir
-  #define DistDir "..\dist\1.3.1\Lotus"
+  #define DistDir "..\dist\1.4.0\Lotus"
 #endif
 #ifndef ReleaseDir
-  #define ReleaseDir "..\dist\1.3.1"
+  #define ReleaseDir "..\dist\1.4.0"
 #endif
 
 [Setup]
@@ -32,7 +32,7 @@ RestartApplications=no
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
-Source: "{#DistDir}\*"; DestDir: "{app}"; Excludes: "*.sqlite,*.db,config.json,config.last-good.json,data\*,logs\*,backups\*,runtime\*"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#DistDir}\*"; DestDir: "{app}"; Excludes: "*.sqlite,*.db,config.json,config.last-good.json,data-location.json,data\*,logs\*,backups\*,runtime\*"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{userdesktop}\创作者工作台"; Filename: "{app}\Lotus.exe"; Parameters: "start"

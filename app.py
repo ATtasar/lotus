@@ -14,7 +14,7 @@ from werkzeug.exceptions import HTTPException
 from db import APP_ID, SCHEMA_VERSION, Conflict, Store
 from updates import RELEASES_PAGE, UpdateCheckError, check_for_updates, read_current_version
 
-DESKTOP_FILES = {"index.html", "styles.css", "app.js", "api.js", "storage.js", "model.js", "design-model.js", "designer.js", "workbench.ico", "workbench-model.js", "tools-extra.js"}
+DESKTOP_FILES = {"index.html", "styles.css", "app.js", "api.js", "storage.js", "model.js", "design-model.js", "designer.js", "workbench.ico", "workbench-model.js", "tools-extra.js", "workspace-model.js", "workspace.js", "workspace.css"}
 MAX_REQUEST_BYTES = 128 * 1024 * 1024
 
 
